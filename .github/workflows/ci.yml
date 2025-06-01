@@ -1,0 +1,91 @@
+name: CityTaster CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-lint-format:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo
+        ports:
+          - 27017:27017
+
+    env:
+      MONGO_URL: mongodb://localhost:27017/CityTasterDB
+      PORT: 5000
+
+    steps:
+      # --- Get your code ---
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # --- BACKEND (Python) SETUP ---
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies (backend)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      # --- Python Linting ---
+      - name: Run Python lint (flake8)
+        run: |
+          pip install flake8
+          flake8 backend/
+        continue-on-error: true  # Warns on style errors, doesn't fail the build
+
+      # --- Python Code Formatting (black) ---
+      - name: Check Python formatting (black)
+        run: |
+          pip install black
+          black --check backend/
+        continue-on-error: true
+
+      # --- (NO BACKEND TESTS YET: Add these steps when ready!) ---
+
+      # --- FRONTEND (React) SETUP ---
+      - name: Set up Node.js for frontend
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm install
+
+      # --- Frontend Linting (ESLint) ---
+      - name: Run frontend lint (eslint)
+        run: |
+          cd frontend
+          npm install eslint
+          npx eslint src/
+        continue-on-error: true
+
+      # --- Frontend Code Formatting (Prettier) ---
+      - name: Check frontend formatting (prettier)
+        run: |
+          cd frontend
+          npm install prettier
+          npx prettier --check "src/**/*.{js,jsx}"
+        continue-on-error: true
+
+      # --- (NO FRONTEND TESTS YET: Add these steps when ready!) ---
+
+      # --- Build Frontend ---
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      # --- Build Docker Images (Check) ---
+      - name: Build backend Docker image
+        run: docker build -f deployment/Dockerfile.backend -t citytaster-backend .
+
+      - name: Build frontend Docker image
+        run: docker build -f deployment/Dockerfile.frontend -t citytaster-frontend .
