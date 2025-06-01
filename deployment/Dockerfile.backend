@@ -1,0 +1,40 @@
+# Purpose of key lines
+# FROM python:3.10-slim: Base image with minimal footprint.
+
+# WORKDIR /app: All subsequent commands run from /app.
+
+# COPY requirements.txt + RUN pip install: Installs Python libs before copying code (faster rebuilds).
+
+# COPY ../backend/ .: Brings your Flask code into the container.
+
+# EXPOSE 5000: Documents which port the app listens on.
+
+# CMD ["python","app.py"]: Launches your API.
+
+# ─── Base Image ──────────────────────────────────────────────────────────────
+# Use a slim Python image to run our Flask API
+FROM python:3.10-slim
+
+# ─── Working Directory ───────────────────────────────────────────────────────
+# All commands run inside /app
+WORKDIR /app
+
+# ─── Install Dependencies ────────────────────────────────────────────────────
+# Copy the requirements file into the container
+COPY requirements.txt . 
+# Install Python libraries (Flask, PyMongo, etc.)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ─── Copy Application Code ──────────────────────────────────────────────────
+# Bring in all backend source files (app.py, db.py, .env gets mounted via docker-compose)
+COPY . .
+
+# ─── Expose Port ────────────────────────────────────────────────────────────
+# Tell Docker that this container listens on port 5000
+EXPOSE 5000
+
+# ─── Launch Command ─────────────────────────────────────────────────────────
+# When the container starts, run our Flask API
+CMD ["python", "app.py"]
+
+

@@ -1,0 +1,56 @@
+# Purpose of key lines
+
+# Multi-stage build: keeps final image small by only copying build output.
+
+# npm run build: Generates production-ready static files.
+
+# FROM nginx:alpine: Serves the static files efficiently.
+
+# COPY --from=build: Transfers only the compiled assets.
+
+# Purpose:
+
+# Install both dependencies and devDependencies (so Vite CLI is available).
+
+# Build the React app with Vite.
+
+# Serve the static output via Nginx.
+
+# ─── Stage 1: Build with Vite ────────────────────────────────────────────────
+FROM node:18-alpine AS build
+
+# Ensure devDependencies (vite) are installed
+ENV NODE_ENV=development
+
+WORKDIR /app
+
+# 1) Copy package files and install dependencies
+COPY package.json package-lock.json* ./
+RUN npm install
+
+# 2) Copy Vite config
+COPY vite.config.js ./
+
+# 3) Copy and position your HTML
+#    Vite expects index.html at the project root, so we copy it there
+COPY public/index.html ./
+
+# 4) Copy all source code
+COPY src/ ./src/
+
+# 5) Build the static assets
+RUN npm run build
+
+# ─── Stage 2: Serve with Nginx ──────────────────────────────────────────────
+FROM nginx:alpine
+
+# Copy build from the previous stage into Nginx’s html folder
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Expose HTTP port
+EXPOSE 80
+
+# Run Nginx in foreground
+CMD ["nginx", "-g", "daemon off;"]
+
+

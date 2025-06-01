@@ -1,0 +1,57 @@
+<!-- Why you need this single HTML file:
+
+1. Entry point for the browser: Browsers always start by loading an HTML page. This file tells the browser where to inject your React app.
+
+2. Root element (<div id="root">): ReactDOM looks for this ID and renders your entire component tree inside it.
+
+3. Meta tags
+
+charset="UTF-8" ensures text displays correctly.
+
+viewport makes the app scale to mobile devices.
+
+4. Vite injection placeholder
+
+During development, Vite injects a module script pointing at your entrypoint (main.jsx).
+
+During production, it injects <script> and <link> tags for the optimized bundles.
+
+5. <noscript> fallback
+Notifies users that JavaScript is required for your SPA to function.
+
+With this in place as frontend/public/index.html, your React/Vite build process will correctly mount the app and handle all routing client-side. -->
+
+<!-- frontend/index.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- 1. Character encoding for proper text rendering -->
+  <meta charset="UTF-8" />
+
+  <!-- 2. Responsive viewport for mobile devices -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- 3. Title shown in the browser tab -->
+  <title>CityTaster</title>
+
+  <!-- 
+    4. Vite’s entrypoint script:
+       - In development, Vite serves `/src/main.jsx` with HMR.
+       - In production build, Vite rewrites this to your bundled files in /dist.
+  -->
+  <script type="module" src="/src/main.jsx"></script>
+</head>
+<body>
+  <!-- 5. React will mount into this div -->
+  <div id="root"></div>
+
+  <!-- 6. Fallback message for users without JavaScript -->
+  <noscript>
+    <strong>
+      CityTaster requires JavaScript. Please enable it to continue.
+    </strong>
+  </noscript>
+</body>
+</html>
+

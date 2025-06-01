@@ -1,0 +1,16 @@
+# Python Dependencies for the requirements.txt file
+
+# Purpose: Lists Python libraries you install via pip install -r requirements.txt.
+
+# flask: micro-web framework
+
+# flask-cors: allow browser → API requests
+
+# pymongo: driver to talk with MongoDB
+
+# python-dotenv: load .env variables
+
+flask           # The web framework
+flask-cors      # Enable cross-origin requests from the frontend
+pymongo         # MongoDB driver for Python
+python-dotenv   # Load environment variables from .env file
