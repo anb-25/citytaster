@@ -1,5 +1,5 @@
 # A MongoDB client is a software library or tool that allows applications to interact with a MongoDB database. It provides the necessary functionality to connect to a MongoDB server, execute queries, insert, update, and delete data, and perform other database operations. 
-# Purpose: Create and export a single MongoDB client, plus a helper to grab any collection (table-equivalent) by name.
+# File Purpose: Create and export a single MongoDB client, plus a helper to grab any collection (table-equivalent) by name.
 
 # backend/db.py
 import os
