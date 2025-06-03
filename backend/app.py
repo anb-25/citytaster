@@ -1,4 +1,5 @@
-# Purpose: Defines all the API endpoints—both public (for your React UI) and admin (to upload new data). Define all HTTP endpoints—public for fetching data, protected for uploading new records.
+# Purpose: Defines all the API endpoints—both public (for your React UI) and admin (to upload new data).
+# Define all HTTP endpoints—public for fetching data, protected for uploading new records.
 
 # backend/app.py
 
