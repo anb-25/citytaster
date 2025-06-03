@@ -10,12 +10,14 @@ from bson.objectid import ObjectId
 app = Flask(__name__)
 CORS(app)  # Allow cross-origin from your Vite dev server
 
+
 def serialize_doc(doc):
     """
     Turn MongoDB’s ObjectId into a string so jsonify() won’t choke.
     """
     doc["_id"] = str(doc["_id"])
     return doc
+
 
 @app.route("/api/cities")
 def list_cities():
@@ -24,9 +26,10 @@ def list_cities():
     • Fetch all documents in the 'city' collection.
     • Used by your map component to plot all cities.
     """
-    coll = get_collection("city")         # singular collection name
-    docs = coll.find({})                  # no filter → all docs
+    coll = get_collection("city")  # singular collection name
+    docs = coll.find({})  # no filter → all docs
     return jsonify([serialize_doc(d) for d in docs])
+
 
 @app.route("/api/city/<int:city_id>")
 def get_city(city_id):
@@ -42,6 +45,7 @@ def get_city(city_id):
         return jsonify({"error": "City not found"}), 404
     return jsonify(serialize_doc(doc))
 
+
 @app.route("/api/food/city/<int:city_id>")
 def food_by_city(city_id):
     """
@@ -52,6 +56,7 @@ def food_by_city(city_id):
     docs = coll.find({"city_id": city_id})
     return jsonify([serialize_doc(d) for d in docs])
 
+
 @app.route("/api/dessert/city/<int:city_id>")
 def dessert_by_city(city_id):
     """
@@ -61,6 +66,7 @@ def dessert_by_city(city_id):
     coll = get_collection("dessert")
     docs = coll.find({"city_id": city_id})
     return jsonify([serialize_doc(d) for d in docs])
+
 
 if __name__ == "__main__":
     # Bind to 0.0.0.0 so Docker can route in

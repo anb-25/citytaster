@@ -63,7 +63,7 @@ jobs:
 
       # --- Frontend Linting (ESLint) ---
       - name: Run frontend lint (eslint)
-        run: cd frontend && npx eslint src/
+        run: cd frontend && npx eslint "src/**/*.{js,jsx}"
         continue-on-error: true
 
       # --- Frontend Code Formatting (Prettier) ---
@@ -83,3 +83,4 @@ jobs:
 
       - name: Build frontend Docker image
         run: docker build -f deployment/Dockerfile.frontend -t citytaster-frontend .
+
