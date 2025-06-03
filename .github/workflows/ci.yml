@@ -40,7 +40,8 @@ jobs:
       - name: Run Python lint (flake8)
         run: |
           pip install flake8
-          flake8 backend/
+          cd backend
+          flake8 .
         continue-on-error: true  # Warns on style errors, doesn't fail the build
 
       # --- Python Code Formatting (black) ---
