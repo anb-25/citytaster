@@ -50,7 +50,10 @@ export default function CityPage() {
         >
           View Food Spots
         </button>
-        <button className="btn" onClick={() => navigate(`/city/${city_id}/dessert`)}>
+        <button
+          className="btn"
+          onClick={() => navigate(`/city/${city_id}/dessert`)}
+        >
           View Dessert Spots
         </button>
       </div>

@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 // Import map and marker components from react-simple-maps
-import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
+import {
+  ComposableMap,
+  Geographies,
+  Geography,
+  Marker,
+} from "react-simple-maps";
 
 // TopoJSON source for US state outlines
 const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
@@ -22,7 +27,10 @@ export default function USMap() {
   return (
     <div>
       {/* Map Page Title */}
-      <h1 className="section-title">CityTaster🍴🌎: Your one stop shop to food & dessert spots across the U.S.</h1>
+      <h1 className="section-title">
+        CityTaster🍴🌎: Your one stop shop to food & dessert spots across the
+        U.S.
+      </h1>
       {/* Render US map using react-simple-maps */}
       <ComposableMap projection="geoAlbersUsa" width={1100} height={600}>
         {/* Draw the states on the map */}
@@ -52,14 +60,14 @@ export default function USMap() {
               y={22} // Vertical offset to position text below the dot; use negative value for above
               textAnchor="middle"
               style={{
-                fontSize: "12px",       // Small, readable font
+                fontSize: "12px", // Small, readable font
                 fontWeight: "bold",
-                fill: "#444",           // Dark text color for contrast
-                pointerEvents: "none",  // Allows clicking the marker even when label is on top
-                paintOrder: "stroke",   // Ensures the stroke is drawn under the text fill
-                stroke: "#fff",         // White border for better readability
+                fill: "#444", // Dark text color for contrast
+                pointerEvents: "none", // Allows clicking the marker even when label is on top
+                paintOrder: "stroke", // Ensures the stroke is drawn under the text fill
+                stroke: "#fff", // White border for better readability
                 strokeWidth: 3,
-                strokeLinejoin: "round"
+                strokeLinejoin: "round",
               }}
             >
               {city.city_name}

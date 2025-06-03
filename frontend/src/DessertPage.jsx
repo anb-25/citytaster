@@ -34,13 +34,21 @@ export default function DessertPage() {
           <div className="spot-links">
             {/* Website link */}
             {spot.dessert_website && (
-              <a href={spot.dessert_website} target="_blank" rel="noopener noreferrer">
+              <a
+                href={spot.dessert_website}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Visit Website
               </a>
             )}
             {/* Review link */}
             {spot.content_link && (
-              <a href={spot.content_link} target="_blank" rel="noopener noreferrer">
+              <a
+                href={spot.content_link}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 View Reviews
               </a>
             )}
@@ -52,5 +60,3 @@ export default function DessertPage() {
     </div>
   );
 }
-
-
