@@ -5,7 +5,6 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from db import get_collection
-from bson.objectid import ObjectId
 
 app = Flask(__name__)
 CORS(app)  # Allow cross-origin from your Vite dev server
