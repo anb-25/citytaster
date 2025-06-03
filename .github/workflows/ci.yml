@@ -68,8 +68,8 @@ jobs:
 
       # --- Frontend Code Formatting (Prettier) ---
       - name: Check frontend formatting (prettier)
-        run: cd frontend && npx prettier --check "src/**/*.{js,jsx}"
-        continue-on-error: true
+        run: cd frontend && npx eslint "src/**/*.{js,jsx}"
+        
 
       # --- (NO FRONTEND TESTS YET: Add these steps when ready!) ---
 
