@@ -1,4 +1,4 @@
 [flake8]
 max-line-length = 200
-exclude = .venv,__pycache__,.env,requirements.txt
 ignore = E203, E266, W503
+exclude = .venv,__pycache__,.env,.git,.tox,*.egg-info

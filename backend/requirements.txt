@@ -14,3 +14,4 @@ flask           # The web framework
 flask-cors      # Enable cross-origin requests from the frontend
 pymongo         # MongoDB driver for Python
 python-dotenv   # Load environment variables from .env file
+flake8          # For linting of the backend code
