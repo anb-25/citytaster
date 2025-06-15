@@ -1,0 +1,40 @@
+version: '3'
+services:
+  mongo:
+    image: mongo:5
+    restart: always
+    container_name: citytaster-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=${DB_NAME}   # Passes your DB name as an env variable
+    volumes:
+      - mongo_data:/data/db
+    # Mount CSV data if you want Mongo to import it at startup (optional; see your app logic)
+
+  backend:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-backend:latest
+    restart: always
+    container_name: citytaster-backend
+    build: ./backend  # Only needed for local dev; not used when pulling from ECR in prod
+    ports:
+      - "5000:5000"
+    environment:
+      - DB_NAME=${DB_NAME}
+      - MONGO_URI=mongodb://mongo:27017/${DB_NAME}
+    depends_on:
+      - mongo
+    # Optionally mount data/ if backend imports CSV at startup
+
+  frontend:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-frontend:latest
+    restart: always
+    container_name: citytaster-frontend
+    build: ./frontend  # Only needed for local dev; not used when pulling from ECR in prod
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
