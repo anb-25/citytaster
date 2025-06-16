@@ -5,6 +5,8 @@ provider "aws" {
   region = var.aws_region  # Uses the variable from variables.tf for flexibility.
 }
 
+data "aws_caller_identity" "current" {}
+
 # This block locks the Terraform version and AWS provider version for consistency.
 terraform {
   required_version = ">= 1.3.0"  # Ensures you're using at least Terraform 1.3.

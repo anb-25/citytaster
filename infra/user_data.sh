@@ -1,4 +1,5 @@
 #!/bin/bash
+# Bash script for EC2 to auto-provision Docker, Git, etc.
 # Update system and install Docker, Docker Compose, AWS CLI
 sudo apt-get update -y
 sudo apt-get install -y docker.io docker-compose awscli git

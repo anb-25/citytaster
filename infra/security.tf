@@ -12,7 +12,7 @@ resource "aws_security_group" "ec2" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["YOUR.IP.ADDRESS.HERE/32"] # Replace this!
+    cidr_blocks = ["0.0.0.0/0"] # Replace this!
   }
 
   # Allow HTTP (web) from anywhere

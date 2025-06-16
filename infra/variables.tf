@@ -19,7 +19,14 @@ variable "key_name" {
 # The name of your MongoDB database; referenced by Docker Compose/env vars later
 variable "db_name" {
   description = "The name of the Mongo database"
-  default     = "citytaster"
+  default     = "CityTasterDB"
 }
+
+# Deploy Key to clone GitHub repo
+variable "github_deploy_key" {
+  description = "Private SSH deploy key for cloning private repo"
+  sensitive   = true
+}
+
 
 
