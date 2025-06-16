@@ -1,0 +1,21 @@
+# Node modules
+node_modules/
+
+# Terraform directories and provider binaries
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Deployment and private key files (never commit secrets/keys!)
+citytaster_deploy
+citytaster_deploy.pub
+citytaster-ec2.pem
+rootkey.csv
+
+# General private keys
+*.pem
+*.pub
+
+# VS Code settings (optional)
+.vscode/
