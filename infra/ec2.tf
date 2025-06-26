@@ -19,7 +19,6 @@ resource "aws_instance" "main" {
   vpc_security_group_ids = [aws_security_group.ec2.id]
   key_name               = var.key_name
 
-
   # Attach IAM instance profile for S3/ECR access
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
@@ -27,6 +26,11 @@ resource "aws_instance" "main" {
     Name = "citytaster-ec2"
   }
 
-  # Provisioner: Use user_data or remote-exec to install Docker, Docker Compose, AWS CLI, and pull your repo
-  # (You will use a deploy key for private repo access—will explain next!)
+  # Dynamically inject variables from Terraform into user_data.sh!
+  user_data = templatefile("${path.module}/user_data.sh", {
+    GITHUB_DEPLOY_KEY = var.github_deploy_key,
+    S3_BUCKET_NAME    = aws_s3_bucket.csv_data.bucket,
+    AWS_REGION        = var.aws_region,
+    AWS_ACCOUNT_ID    = data.aws_caller_identity.current.account_id
+  })
 }

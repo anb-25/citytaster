@@ -16,42 +16,42 @@
 
 # volumes: at the bottom defines named volumes used by services.
 
-version: '3'
+
 services:
   mongo:
     image: mongo:6.0
     container_name: citytaster-mongo
     restart: always
     environment:
-      MONGO_INITDB_DATABASE: ${DB_NAME}
+      MONGO_INITDB_DATABASE: CityTasterDB
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
 
   backend:
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-backend:latest
+    build:
+      context: ./backend
+      dockerfile: ../deployment/Dockerfile.backend
     container_name: citytaster-backend
-    restart: always
     env_file:
       - ./backend/.env
-    environment:
-      DB_NAME: ${DB_NAME}
-      MONGO_URI: mongodb://mongo:27017/${DB_NAME}
     ports:
       - "5000:5000"
     depends_on:
       - mongo
 
   frontend:
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: ../deployment/Dockerfile.frontend
     container_name: citytaster-frontend
-    restart: always
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - backend
 
 volumes:
   mongo-data:
     driver: local
+
