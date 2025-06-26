@@ -19,3 +19,11 @@ rootkey.csv
 
 # VS Code settings (optional)
 .vscode/
+
+#.env files
+.env
+**/.env
+*.env
+**/*.env
+.env.*
+**/.env.*
