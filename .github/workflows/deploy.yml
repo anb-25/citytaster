@@ -2,29 +2,33 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]            # Deploy only on main branch changes
-  workflow_dispatch:            # Allow manual triggering from the GitHub UI
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     env:
-      AWS_REGION: us-east-1           # The AWS region for all AWS actions in this workflow
-      DB_NAME: CityTasterDB           # MongoDB database name, if needed in scripts
+      AWS_REGION: us-east-1
+      DB_NAME: CityTasterDB
 
     steps:
-      # --- Show Docker version/info for debug ---
+      # Show Docker and system info for troubleshooting
       - name: Show Docker version/info
         run: |
           docker version
           docker info
 
-      # --- Checkout code from repo ---
+      # Checkout source code from repo
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- Configure AWS credentials for subsequent AWS CLI usage ---
+      # Set up Docker Buildx (required for buildx commands)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -32,40 +36,38 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # --- Login to Amazon ECR (Container Registry) ---
+      # Login to Amazon ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- Build and push backend Docker image using buildx ---
+      # Build and push backend Docker image using buildx
       - name: Build and push backend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          echo "Building backend image with buildx"
+          echo "docker buildx build --push -f deployment/Dockerfile.backend -t $ECR_REGISTRY/citytaster-backend:latest ./backend"
           docker buildx build --push \
             -f deployment/Dockerfile.backend \
             -t $ECR_REGISTRY/citytaster-backend:latest \
             ./backend
 
-      # --- Build and push frontend Docker image using buildx ---
+      # Build and push frontend Docker image using buildx
       - name: Build and push frontend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          echo "Building frontend image with buildx"
+          echo "docker buildx build --push -f deployment/Dockerfile.frontend -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend"
           docker buildx build --push \
             -f deployment/Dockerfile.frontend \
             -t $ECR_REGISTRY/citytaster-frontend:latest \
             ./frontend
 
-      # --- Sync CSV data folder to S3 ---
+      # Sync data folder to S3
       - name: Sync data folder to S3
         run: |
           aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
-      # --- SSH into EC2 and redeploy containers ---
-      # You must add the following secrets in your GitHub repo:
-      # EC2_PUBLIC_IP, EC2_SSH_KEY, S3_BUCKET_NAME, AWS_ACCOUNT_ID
+      # SSH into EC2 and redeploy containers (docker-compose)
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -74,19 +76,16 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd app || cd ~/app || mkdir -p app && cd app
-
             aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
-
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-
             docker-compose pull
             docker-compose up -d
-
-            docker image prune -af
+            docker image prune -af  # Clean up unused images
 
 # -------------------------------------------------------------
 # IMPORTANT:
-#   - All sensitive info should be set as repository or org secrets, not committed!
-#   - The region in ECR_REGISTRY must match AWS_REGION.
-#   - Never hardcode sensitive keys, secrets, or private SSH keys in this file.
+# - All sensitive info should be set as repository or org secrets, not committed!
+# - The region in ECR_REGISTRY must match AWS_REGION.
+# - Never hardcode sensitive keys, secrets, or private SSH keys in this file.
 # -------------------------------------------------------------
+
