@@ -1,0 +1,90 @@
+name: CityTaster Deploy
+
+on:
+  push:
+    branches: [main]            # Deploy only on main branch changes
+  workflow_dispatch:            # Allow manual manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    # --- Set safe job-level environment variables ---
+    env:
+      AWS_REGION: us-east-1           # The AWS region for all AWS actions
+      DB_NAME: CityTasterDB           # MongoDB database name, if needed
+
+    steps:
+      # --- Checkout code from your repo ---
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- Configure AWS credentials for AWS CLI and docker login ---
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # --- Login to Amazon ECR so you can push Docker images ---
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # --- Build and push backend Docker image using classic docker ---
+      - name: Build and push backend Docker image
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+        run: |
+          # Build the backend Docker image using classic docker (not buildx)
+          docker build -t $ECR_REGISTRY/citytaster-backend:latest ./backend
+          # Push the backend image to ECR
+          docker push $ECR_REGISTRY/citytaster-backend:latest
+
+      # --- Build and push frontend Docker image using classic docker ---
+      - name: Build and push frontend Docker image
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+        run: |
+          # Build the frontend Docker image using classic docker (not buildx)
+          docker build -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
+          # Push the frontend image to ECR
+          docker push $ECR_REGISTRY/citytaster-frontend:latest
+
+      # --- Sync CSV/data folder to S3 (if needed by your app) ---
+      - name: Sync data folder to S3
+        run: |
+          # This syncs your local ./data folder to your S3 bucket
+          aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
+
+      # --- SSH into your EC2 and redeploy containers (ensure these secrets are set) ---
+      # Required secrets: EC2_PUBLIC_IP, EC2_SSH_KEY, S3_BUCKET_NAME, AWS_ACCOUNT_ID
+      - name: Deploy on EC2 via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Change directory to your app folder (update path if different)
+            cd app || cd ~/app || mkdir -p app && cd app
+
+            # Pull latest data from S3
+            aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
+
+            # Login to ECR to pull new images
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+            # Pull the new Docker images and redeploy with docker-compose
+            docker-compose pull
+            docker-compose up -d
+
+            # (Optional) Clean up old Docker images
+            docker image prune -af
+
+# ----------------------------------------
+# IMPORTANT:
+# - All AWS and sensitive data must be stored as GitHub Secrets, NOT committed!
+# - You do NOT need or use buildx in this workflow.
+# - This is 100% compatible with classic Docker build/push (as in your CI).
+# ----------------------------------------
