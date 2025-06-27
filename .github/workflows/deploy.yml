@@ -2,14 +2,13 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]             # Deploy only on main branch changes
-  workflow_dispatch:             # Allow manual triggering from the GitHub UI
+    branches: [main]            # Deploy only on main branch changes
+  workflow_dispatch:            # Allow manual triggering from the GitHub UI
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # Set global env vars available to all steps in this job
     env:
       AWS_REGION: us-east-1           # The AWS region for all AWS actions in this workflow
       DB_NAME: CityTasterDB           # MongoDB database name, if needed in scripts
@@ -37,26 +36,22 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Debug workspace directory 
-        run: ls -lR
-
-      # --- Build and push backend Docker image (FORCE classic docker build) ---
+      # --- Build and push backend Docker image using the classic builder ---
       - name: Build and push backend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          # Force classic Docker builder instead of buildx/buildkit
-          export DOCKER_BUILDKIT=0
-          docker build -t $ECR_REGISTRY/citytaster-backend:latest ./backend
+          # Use -f to specify the Dockerfile in the deployment directory
+          docker build -f deployment/Dockerfile.backend -t $ECR_REGISTRY/citytaster-backend:latest ./backend
           docker push $ECR_REGISTRY/citytaster-backend:latest
 
-      # --- Build and push frontend Docker image (FORCE classic docker build) ---
+      # --- Build and push frontend Docker image using the classic builder ---
       - name: Build and push frontend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          export DOCKER_BUILDKIT=0
-          docker build -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
+          # Use -f to specify the Dockerfile in the deployment directory
+          docker build -f deployment/Dockerfile.frontend -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
           docker push $ECR_REGISTRY/citytaster-frontend:latest
 
       # --- Sync CSV data folder to S3 ---
@@ -74,20 +69,15 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Ensure app directory exists and move into it
             cd app || cd ~/app || mkdir -p app && cd app
 
-            # Sync latest data from S3 bucket
             aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
 
-            # Login to ECR for docker pulls on EC2
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
 
-            # Pull and redeploy latest containers
             docker-compose pull
             docker-compose up -d
 
-            # (Optional) Clean up old/dangling Docker images
             docker image prune -af
 
 # -------------------------------------------------------------
