@@ -37,6 +37,9 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Debug workspace directory 
+        run: ls -lR
+
       # --- Build and push backend Docker image (FORCE classic docker build) ---
       - name: Build and push backend Docker image
         env:
