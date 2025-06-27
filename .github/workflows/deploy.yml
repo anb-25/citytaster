@@ -2,23 +2,36 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: [main]            # Deploy only on main branch changes
+  workflow_dispatch:            # Allow manual triggering from the GitHub UI
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # Safe job-level envs (static only)
     env:
-      AWS_REGION: us-east-1
-      DB_NAME: CityTasterDB
+      AWS_REGION: us-east-1           # The AWS region for all AWS actions in this workflow
+      DB_NAME: CityTasterDB           # MongoDB database name, if needed in scripts
 
     steps:
+      # --- Diagnostics: Show Docker version and buildx status ---
+      - name: Show Docker version/info
+        run: |
+          docker version
+          docker info
+
+      - name: Show Docker builders (diagnostic)
+        run: docker buildx ls
+
+      # --- Setup Buildx so it is always available ---
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- Checkout code from repo ---
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # AWS credentials
+      # --- Configure AWS credentials for subsequent AWS CLI usage ---
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -26,58 +39,54 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ECR Login (no ECR_REGISTRY needed here)
+      # --- Login to Amazon ECR (Container Registry) ---
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Build and push backend Docker image
+      # --- Build and push backend Docker image (ALWAYS use buildx now!) ---
       - name: Build and push backend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          docker build -t $ECR_REGISTRY/citytaster-backend:latest ./backend
-          docker push $ECR_REGISTRY/citytaster-backend:latest
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $ECR_REGISTRY/citytaster-backend:latest ./backend \
+            --push
 
-      # Build and push frontend Docker image
+      # --- Build and push frontend Docker image (ALWAYS use buildx now!) ---
       - name: Build and push frontend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          docker build -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
-          docker push $ECR_REGISTRY/citytaster-frontend:latest
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend \
+            --push
 
-      # Sync CSV data folder to S3
+      # --- Sync CSV data folder to S3 ---
       - name: Sync data folder to S3
-        env:
-          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
         run: |
-          aws s3 sync ./data s3://$S3_BUCKET_NAME/data
+          aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
-      # SSH into EC2 and redeploy Docker Compose stack
+      # --- SSH into EC2 and redeploy containers ---
+      # You must add the following secrets in your GitHub repo:
+      # EC2_PUBLIC_IP, EC2_SSH_KEY, S3_BUCKET_NAME, AWS_ACCOUNT_ID
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_PUBLIC_IP }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: AWS_REGION,ECR_REGISTRY,S3_BUCKET_NAME
           script: |
-            export ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com"
-            export S3_BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}"
-            # Go to your app directory (update as needed)
             cd app || cd ~/app || mkdir -p app && cd app
 
-            # Sync latest data from S3
-            aws s3 sync s3://$S3_BUCKET_NAME/data ./data
+            aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
 
-            # Login to ECR
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
 
-            # Pull and redeploy latest containers
             docker-compose pull
             docker-compose up -d
 
-            # (Optional) Clean up old/dangling Docker images
             docker image prune -af
 
 # -------------------------------------------------------------
