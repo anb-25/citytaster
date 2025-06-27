@@ -2,31 +2,27 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]           # Deploy only on main branch changes
-  workflow_dispatch:           # Allow manual triggering from the GitHub UI
+    branches: [main]            # Deploy only on main branch changes
+  workflow_dispatch:            # Allow manual triggering from the GitHub UI
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     env:
-      AWS_REGION: us-east-1        # AWS region
-      DB_NAME: CityTasterDB        # MongoDB DB name, if needed in scripts
+      AWS_REGION: us-east-1           # The AWS region for all AWS actions in this workflow
+      DB_NAME: CityTasterDB           # MongoDB database name, if needed in scripts
 
     steps:
+      # --- Show Docker version/info for debug ---
+      - name: Show Docker version/info
+        run: |
+          docker version
+          docker info
+
       # --- Checkout code from repo ---
       - name: Checkout code
         uses: actions/checkout@v4
-
-      # --- Diagnostics: Show Docker version/info ---
-      - name: Show Docker version/info
-        run: |
-          echo "docker binary location:"
-          which docker
-          echo "docker version:"
-          docker version
-          echo "docker build help:"
-          docker build --help
 
       # --- Configure AWS credentials for subsequent AWS CLI usage ---
       - name: Configure AWS credentials
@@ -40,25 +36,27 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- Build and push backend Docker image (classic builder, NOT buildx) ---
+      # --- Build and push backend Docker image using buildx ---
       - name: Build and push backend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-          DOCKER_BUILDKIT: 0  # Force classic Docker builder!
         run: |
-          echo "Building backend image with classic docker build"
-          docker build -f deployment/Dockerfile.backend -t $ECR_REGISTRY/citytaster-backend:latest ./backend
-          docker push $ECR_REGISTRY/citytaster-backend:latest
+          echo "Building backend image with buildx"
+          docker buildx build --push \
+            -f deployment/Dockerfile.backend \
+            -t $ECR_REGISTRY/citytaster-backend:latest \
+            ./backend
 
-      # --- Build and push frontend Docker image (classic builder, NOT buildx) ---
+      # --- Build and push frontend Docker image using buildx ---
       - name: Build and push frontend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-          DOCKER_BUILDKIT: 0  # Force classic Docker builder!
         run: |
-          echo "Building frontend image with classic docker build"
-          docker build -f deployment/Dockerfile.frontend -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
-          docker push $ECR_REGISTRY/citytaster-frontend:latest
+          echo "Building frontend image with buildx"
+          docker buildx build --push \
+            -f deployment/Dockerfile.frontend \
+            -t $ECR_REGISTRY/citytaster-frontend:latest \
+            ./frontend
 
       # --- Sync CSV data folder to S3 ---
       - name: Sync data folder to S3
@@ -66,6 +64,8 @@ jobs:
           aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
       # --- SSH into EC2 and redeploy containers ---
+      # You must add the following secrets in your GitHub repo:
+      # EC2_PUBLIC_IP, EC2_SSH_KEY, S3_BUCKET_NAME, AWS_ACCOUNT_ID
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -86,6 +86,7 @@ jobs:
 
 # -------------------------------------------------------------
 # IMPORTANT:
-#   - Do NOT add docker/setup-buildx-action anywhere!
-#   - If you still get buildx errors, something outside this file is affecting your environment.
+#   - All sensitive info should be set as repository or org secrets, not committed!
+#   - The region in ECR_REGISTRY must match AWS_REGION.
+#   - Never hardcode sensitive keys, secrets, or private SSH keys in this file.
 # -------------------------------------------------------------
