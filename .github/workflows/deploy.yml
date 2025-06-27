@@ -20,6 +20,19 @@ jobs:
           docker version
           docker info
 
+      # --- Extra: Debug Docker build alias and plugins ---
+      # This helps you confirm exactly what Docker build tools are present in this runner.
+      - name: Debug Docker build alias
+        run: |
+          echo "Docker binary location:"
+          which docker
+          echo "Docker version:"
+          docker --version
+          echo "Docker build help output:"
+          docker build --help
+          echo "Docker buildx version (should say 'not available' if not installed):"
+          docker buildx version || echo "buildx not available"
+
       # --- Checkout code from repo ---
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,7 +49,7 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- Build and push backend Docker image ---
+      # --- Build and push backend Docker image (using classic docker build) ---
       - name: Build and push backend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
@@ -44,7 +57,7 @@ jobs:
           docker build -t $ECR_REGISTRY/citytaster-backend:latest ./backend
           docker push $ECR_REGISTRY/citytaster-backend:latest
 
-      # --- Build and push frontend Docker image ---
+      # --- Build and push frontend Docker image (using classic docker build) ---
       - name: Build and push frontend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
@@ -84,5 +97,3 @@ jobs:
 #   - The region in ECR_REGISTRY must match AWS_REGION.
 #   - Never hardcode sensitive keys, secrets, or private SSH keys in this file.
 # -------------------------------------------------------------
-
-
