@@ -3,23 +3,28 @@ name: CityTaster Deploy
 on:
   push:
     branches: [main]            # Deploy only on main branch changes
-  workflow_dispatch:            # Allow manual manual trigger from GitHub UI
+  workflow_dispatch:            # Allow manual triggering from the GitHub UI
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # --- Set safe job-level environment variables ---
     env:
-      AWS_REGION: us-east-1           # The AWS region for all AWS actions
-      DB_NAME: CityTasterDB           # MongoDB database name, if needed
+      AWS_REGION: us-east-1           # The AWS region for all AWS actions in this workflow
+      DB_NAME: CityTasterDB           # MongoDB database name, if needed in scripts
 
     steps:
-      # --- Checkout code from your repo ---
+      # --- Diagnostics: Show Docker version/info ---
+      - name: Show Docker version/info
+        run: |
+          docker version
+          docker info
+
+      # --- Checkout code from repo ---
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- Configure AWS credentials for AWS CLI and docker login ---
+      # --- Configure AWS credentials for subsequent AWS CLI usage ---
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -27,38 +32,48 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # --- Login to Amazon ECR so you can push Docker images ---
+      # --- Login to Amazon ECR (Container Registry) ---
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- Build and push backend Docker image using classic docker ---
+      # --- DEBUG: See what "docker" actually runs ---
+      - name: Debug Docker build resolution
+        run: |
+          echo "Shell location: $SHELL"
+          echo "PATH: $PATH"
+          which docker
+          docker --version
+          type docker
+          alias docker || echo "No docker alias"
+          command -v docker
+          cat $(which docker) || echo "Cannot cat docker binary"
+          echo "Testing 'docker build'..."
+          docker build --help
+
+      # --- Build and push backend Docker image (classic docker build) ---
       - name: Build and push backend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          # Build the backend Docker image using classic docker (not buildx)
           docker build -t $ECR_REGISTRY/citytaster-backend:latest ./backend
-          # Push the backend image to ECR
           docker push $ECR_REGISTRY/citytaster-backend:latest
 
-      # --- Build and push frontend Docker image using classic docker ---
+      # --- Build and push frontend Docker image (classic docker build) ---
       - name: Build and push frontend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          # Build the frontend Docker image using classic docker (not buildx)
           docker build -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
-          # Push the frontend image to ECR
           docker push $ECR_REGISTRY/citytaster-frontend:latest
 
-      # --- Sync CSV/data folder to S3 (if needed by your app) ---
+      # --- Sync CSV data folder to S3 ---
       - name: Sync data folder to S3
         run: |
-          # This syncs your local ./data folder to your S3 bucket
           aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
-      # --- SSH into your EC2 and redeploy containers (ensure these secrets are set) ---
-      # Required secrets: EC2_PUBLIC_IP, EC2_SSH_KEY, S3_BUCKET_NAME, AWS_ACCOUNT_ID
+      # --- SSH into EC2 and redeploy containers ---
+      # You must add the following secrets in your GitHub repo:
+      # EC2_PUBLIC_IP, EC2_SSH_KEY, S3_BUCKET_NAME, AWS_ACCOUNT_ID
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -66,25 +81,20 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Change directory to your app folder (update path if different)
             cd app || cd ~/app || mkdir -p app && cd app
 
-            # Pull latest data from S3
             aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
 
-            # Login to ECR to pull new images
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
 
-            # Pull the new Docker images and redeploy with docker-compose
             docker-compose pull
             docker-compose up -d
 
-            # (Optional) Clean up old Docker images
             docker image prune -af
 
-# ----------------------------------------
+# -------------------------------------------------------------
 # IMPORTANT:
-# - All AWS and sensitive data must be stored as GitHub Secrets, NOT committed!
-# - You do NOT need or use buildx in this workflow.
-# - This is 100% compatible with classic Docker build/push (as in your CI).
-# ----------------------------------------
+#   - All sensitive info should be set as repository or org secrets, not committed!
+#   - The region in ECR_REGISTRY must match AWS_REGION.
+#   - Never hardcode sensitive keys, secrets, or private SSH keys in this file.
+# -------------------------------------------------------------
