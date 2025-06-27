@@ -2,28 +2,32 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]           # Deploy only on main branch changes
-  workflow_dispatch:           # Allow manual triggering
+    branches: [main]            # Deploy only on main branch changes
+  workflow_dispatch:            # Allow manual triggering from the GitHub UI
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    # ---------------------------------------------------------
+    # Job-level environment variables
+    # ---------------------------------------------------------
     env:
-      AWS_REGION: us-east-1
-      ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
-      DB_NAME: CityTasterDB    # If needed for your images or scripts
+      AWS_REGION: us-east-1           # The AWS region for all AWS actions in this workflow
+      ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+        # ECR registry URL; use the correct AWS region here
+      DB_NAME: CityTasterDB           # MongoDB database name, if needed in scripts
 
     steps:
-      # --- Checkout code ---
+      # --- Checkout code from repo ---
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- Set up Docker Buildx for multi-arch support ---
+      # --- Set up Docker Buildx for multi-arch Docker builds ---
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --- Configure AWS credentials using GitHub secrets ---
+      # --- Configure AWS credentials for subsequent AWS CLI usage ---
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -31,7 +35,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # --- Login to Amazon ECR (container registry) ---
+      # --- Login to Amazon ECR (Container Registry) ---
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -47,13 +51,14 @@ jobs:
           docker build -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
           docker push $ECR_REGISTRY/citytaster-frontend:latest
 
-      # --- Sync CSV data folder to S3 (for /data CSVs) ---
+      # --- Sync CSV data folder to S3 ---
       - name: Sync data folder to S3
         run: |
           aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
       # --- SSH into EC2 and redeploy containers ---
-      # Requires the following secrets: EC2_PUBLIC_IP, EC2_SSH_KEY (PEM contents, not path), S3_BUCKET_NAME, AWS_ACCOUNT_ID
+      # You must add the following secrets in your GitHub repo:
+      # EC2_PUBLIC_IP, EC2_SSH_KEY, S3_BUCKET_NAME, AWS_ACCOUNT_ID
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -61,19 +66,26 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Change to the app directory (update if needed)
+            # Go to your app directory (update as needed)
             cd app || cd ~/app || mkdir -p app && cd app
 
-            # Sync latest CSVs from S3 to /data (update if your app uses a different folder)
+            # Sync latest data from S3
             aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
 
-            # Login to ECR for Docker pulls
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
+            # Login to ECR
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            # Pull latest images and redeploy
+            # Pull and redeploy latest containers
             docker-compose pull
             docker-compose up -d
 
-            # (Optional) Clean up dangling images
+            # (Optional) Clean up old/dangling Docker images
             docker image prune -af
+
+# -------------------------------------------------------------
+# IMPORTANT:
+#   - All sensitive info should be set as repository or org secrets, not committed!
+#   - The region in ECR_REGISTRY must match AWS_REGION.
+#   - Never hardcode sensitive keys, secrets, or private SSH keys in this file.
+# -------------------------------------------------------------
 
