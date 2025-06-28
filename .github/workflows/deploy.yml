@@ -2,8 +2,8 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: [main]         # Deploy only on main branch changes
+  workflow_dispatch:         # Allow manual triggering from the GitHub UI
 
 jobs:
   deploy:
@@ -19,6 +19,9 @@ jobs:
         run: |
           docker version
           docker info
+          env
+          echo "PATH is $PATH"
+          echo "SHELL is $SHELL"
 
       # Checkout source code from repo
       - name: Checkout code
@@ -40,34 +43,47 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Build and push backend Docker image using buildx
+      # Debug: Print ECR_REGISTRY and list backend dir
+      - name: Debug ECR_REGISTRY and backend dir
+        run: |
+          echo "ECR_REGISTRY: $ECR_REGISTRY"
+          echo "AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}"
+          echo "Listing backend directory:"
+          ls -la ./backend
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+      # Build and push backend Docker image (single line, no trailing \)
       - name: Build and push backend Docker image
+        run: |
+          echo "Building backend image with buildx"
+          docker buildx build --push -f deployment/Dockerfile.backend -t $ECR_REGISTRY/citytaster-backend:latest ./backend
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-        run: |
-          echo "docker buildx build --push -f deployment/Dockerfile.backend -t $ECR_REGISTRY/citytaster-backend:latest ./backend"
-          docker buildx build --push \
-            -f deployment/Dockerfile.backend \
-            -t $ECR_REGISTRY/citytaster-backend:latest \
-            ./backend
 
-      # Build and push frontend Docker image using buildx
+      # Debug: Print ECR_REGISTRY and list frontend dir
+      - name: Debug ECR_REGISTRY and frontend dir
+        run: |
+          echo "ECR_REGISTRY: $ECR_REGISTRY"
+          echo "AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}"
+          echo "Listing frontend directory:"
+          ls -la ./frontend
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+      # Build and push frontend Docker image (single line, no trailing \)
       - name: Build and push frontend Docker image
+        run: |
+          echo "Building frontend image with buildx"
+          docker buildx build --push -f deployment/Dockerfile.frontend -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-        run: |
-          echo "docker buildx build --push -f deployment/Dockerfile.frontend -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend"
-          docker buildx build --push \
-            -f deployment/Dockerfile.frontend \
-            -t $ECR_REGISTRY/citytaster-frontend:latest \
-            ./frontend
 
-      # Sync data folder to S3
+      # Sync CSV data folder to S3
       - name: Sync data folder to S3
-        run: |
-          aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
+        run: aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
-      # SSH into EC2 and redeploy containers (docker-compose)
+      # SSH into EC2 and redeploy containers
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
