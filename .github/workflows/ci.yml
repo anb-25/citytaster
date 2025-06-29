@@ -1,132 +1,90 @@
-#CI file for CityTaster project
 name: CityTaster CI
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+  pull_request:
+    branches: [main]
 
 jobs:
-  deploy:
+  build-lint-format:
     runs-on: ubuntu-latest
 
+    services:
+      mongo:
+        image: mongo
+        ports:
+          - 27017:27017
+
     env:
-      AWS_REGION: us-east-1
-      DB_NAME: CityTasterDB
+      MONGO_URL: mongodb://localhost:27017/CityTasterDB
+      PORT: 5000
 
     steps:
-      # Checkout latest code
+      # --- Get your code ---
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      # Set up Docker Buildx for multi-platform build support
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Configure AWS credentials for CLI and Docker
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      # --- BACKEND (Python) SETUP ---
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          python-version: '3.10'
 
-      # Start EC2 instance (if stopped)
-      - name: Start EC2 instance
+      - name: Install Python dependencies (backend)
         run: |
-          aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
 
-      # Wait until EC2 instance is running
-      - name: Wait for EC2 to be running
+      # --- Python Linting ---
+      - name: Run Python lint (flake8)
         run: |
-          aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pip install flake8
+          cd backend
+          flake8 .
+        continue-on-error: true  # Warns on style errors, doesn't fail the build
 
-      # Get EC2 public IP dynamically
-      - name: Get EC2 public IP
-        id: ec2ip
+      # --- Python Code Formatting (black) ---
+      - name: Check Python formatting (black)
         run: |
-          ip=$(aws ec2 describe-instances \
-            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
-            --region $AWS_REGION \
-            --query "Reservations[0].Instances[0].PublicIpAddress" \
-            --output text)
-          echo "EC2_PUBLIC_IP=$ip" >> $GITHUB_ENV
-          echo "Public IP is $ip"
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pip install black
+          black --check backend/
+        continue-on-error: true
 
-      # Login to ECR
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
+      # --- (NO BACKEND TESTS YET: Add these steps when ready!) ---
 
-      # Build and push backend Docker image
-      - name: Build and push backend Docker image
-        run: |
-          docker buildx build \
-            --push \
-            --file deployment/Dockerfile.backend \
-            -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-backend:latest" \
-            .
-      
-      # Build and push frontend Docker image
-      - name: Build and push frontend Docker image
-        run: |
-          docker buildx build \
-            --push \
-            --file deployment/Dockerfile.frontend \
-            -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-frontend:latest" \
-            .
-
-      # Sync data directory to S3
-      - name: Sync data folder to S3
-        run: |
-          aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
-
-      # Deploy to EC2 using SSH and docker-compose
-      - name: Deploy on EC2 via SSH
-        uses: appleboy/ssh-action@v1
+      # --- FRONTEND (React) SETUP ---
+      - name: Set up Node.js for frontend
+        uses: actions/setup-node@v3
         with:
-          host: ${{ env.EC2_PUBLIC_IP }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd app || (mkdir app && cd app)
-            aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
-            docker-compose pull
-            docker-compose up -d
-            docker image prune -af
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          node-version: '18'
 
-      # Output the preview URL for your app
-      - name: Output Preview URL
-        run: |
-          echo "------------------------------------------"
-          echo "Your app is live at:"
-          echo "http://${{ env.EC2_PUBLIC_IP }}"
-          echo "------------------------------------------"
+      - name: Install frontend dependencies
+        run: cd frontend && npm install
 
-      # (Optional) Stop EC2 instance after deploy to save costs
-      - name: Stop EC2 instance
-        if: always()
-        run: |
-          aws ec2 stop-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # --- Frontend Linting (ESLint) ---
+      - name: Run frontend lint (eslint)
+        run: cd frontend && npx eslint "src/**/*.{js,jsx}"
+        continue-on-error: true
 
+      # --- Frontend Code Formatting (Prettier) ---
+      - name: Check frontend formatting (prettier)
+        run: cd frontend && npx eslint "src/**/*.{js,jsx}"
+        
 
+      # --- (NO FRONTEND TESTS YET: Add these steps when ready!) ---
+
+      # --- Build Frontend ---
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      # Debug file structure
+      - name: List workspace files
+        run: ls -lR
+
+      # --- Build Docker Images (Check) ---
+      - name: Build backend Docker image
+        run: docker build -f deployment/Dockerfile.backend -t citytaster-backend .
+
+      - name: Build frontend Docker image
+        run: docker build -f deployment/Dockerfile.frontend -t citytaster-frontend .
