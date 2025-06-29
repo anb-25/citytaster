@@ -2,27 +2,27 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]           # Trigger on main branch push
-  workflow_dispatch:           # Allow manual trigger via GitHub UI
+    branches: [main]           # Trigger on push to main branch
+  workflow_dispatch:           # Allow manual runs from GitHub UI
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     env:
-      AWS_REGION: us-east-1    # Used for AWS CLI
-      DB_NAME: CityTasterDB    # Example: exported to container if needed
+      AWS_REGION: us-east-1    # Used by AWS CLI
+      DB_NAME: CityTasterDB    # Optional: for container/env reference
 
     steps:
-      # Checkout code
+      # Pull latest code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Docker Buildx (for multi-platform & cache)
+      # Set up Docker Buildx builder
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Configure AWS credentials for CLI and Docker access
+      # Configure AWS CLI credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -34,34 +34,30 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Build and push backend image to ECR
+      # Build & push backend image to ECR
       - name: Build and push backend Docker image
         run: |
-          ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com"
-
           docker buildx build \
             --push \
             --file deployment/Dockerfile.backend \
-            --tag "$ECR_REGISTRY/citytaster-backend:latest" \
+            --tag "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/citytaster-backend:latest" \
             ./backend
 
-      # Build and push frontend image to ECR
+      # Build & push frontend image to ECR
       - name: Build and push frontend Docker image
         run: |
-          ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com"
-
           docker buildx build \
             --push \
             --file deployment/Dockerfile.frontend \
-            --tag "$ECR_REGISTRY/citytaster-frontend:latest" \
+            --tag "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/citytaster-frontend:latest" \
             ./frontend
 
-      # Upload data directory to S3 bucket
+      # Upload data/ directory to S3
       - name: Sync data folder to S3
         run: |
           aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
-      # Deploy remotely to EC2 via SSH
+      # SSH into EC2 and deploy using docker-compose
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -75,5 +71,4 @@ jobs:
             docker-compose pull
             docker-compose up -d
             docker image prune -af
-
 
