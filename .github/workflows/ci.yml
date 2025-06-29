@@ -1,10 +1,6 @@
-<<<<<<< HEAD
 #CI file for CityTaster project
 name: CityTaster CI
-=======
-name: CityTaster Deploy
 
->>>>>>> 082b4579c35d13ddf4e03fb30404e6fbc7a59e3a
 on:
   push:
     branches: [main]
