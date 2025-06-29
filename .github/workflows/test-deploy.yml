@@ -14,6 +14,11 @@ jobs:
       DB_NAME: CityTasterDB
 
     steps:
+      - name: Show Docker version/info
+        run: |
+          docker version
+          docker info
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -30,53 +35,36 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # -------------------------------------------
-      # Build and push backend Docker image (DEBUG)
-      # -------------------------------------------
       - name: Build and push backend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          echo "### DEBUG: Show current working directory and list files"
-          pwd
-          ls -la
+          docker buildx build --push -f deployment/Dockerfile.backend \
+            -t $ECR_REGISTRY/citytaster-backend:latest ./backend
 
-          echo "### DEBUG: Show backend folder contents"
-          ls -la ./backend
-
-          echo "### DEBUG: Show Docker and Buildx version"
-          docker --version
-          docker buildx version
-
-          echo "### DEBUG: Show the exact command about to be run"
-          echo "docker buildx build --push -f deployment/Dockerfile.backend -t $ECR_REGISTRY/citytaster-backend:latest ./backend"
-
-          echo "### DEBUG: Run the actual docker buildx command"
-          docker buildx build --push -f deployment/Dockerfile.backend -t $ECR_REGISTRY/citytaster-backend:latest ./backend
-
-      # -------------------------------------------
-      # Build and push frontend Docker image (DEBUG)
-      # -------------------------------------------
       - name: Build and push frontend Docker image
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
         run: |
-          echo "### DEBUG: Show current working directory and list files"
-          pwd
-          ls -la
+          docker buildx build --push -f deployment/Dockerfile.frontend \
+            -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
 
-          echo "### DEBUG: Show frontend folder contents"
-          ls -la ./frontend
+      - name: Sync data folder to S3
+        run: |
+          aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
-          echo "### DEBUG: Show Docker and Buildx version"
-          docker --version
-          docker buildx version
+      - name: Deploy on EC2 via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd app || cd ~/app || mkdir -p app && cd app
+            aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+            docker-compose pull
+            docker-compose up -d
+            docker image prune -af
 
-          echo "### DEBUG: Show the exact command about to be run"
-          echo "docker buildx build --push -f deployment/Dockerfile.frontend -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend"
-
-          echo "### DEBUG: Run the actual docker buildx command"
-          docker buildx build --push -f deployment/Dockerfile.frontend -t $ECR_REGISTRY/citytaster-frontend:latest ./frontend
-
-      # (The rest of your workflow steps go here, such as syncing S3, SSH deploy, etc.)
 

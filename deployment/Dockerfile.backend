@@ -18,20 +18,19 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # ---- Install Dependencies ----
-# Copy the requirements file into the container (relative to build context = root)
-COPY backend/requirements.txt .
-
-# Install Python libraries (Flask, PyMongo, etc.)
+# Copy requirements.txt from context root (so: backend/requirements.txt)
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ---- Copy Application Code ----
-# Bring in all backend source files (app.py, db.py, .env, etc)
-COPY backend/. .
+# Copy all backend source files (e.g., app.py, db.py, .env, etc)
+COPY . .
 
 # ---- Expose Port ----
 EXPOSE 5000
 
 # ---- Launch Command ----
 CMD ["python", "app.py"]
+
 
 

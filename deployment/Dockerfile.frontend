@@ -22,22 +22,16 @@
 # ---- Stage 1: Build with Vite ----
 FROM node:18-alpine AS build
 
-# Set working directory
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY frontend/package.json frontend/package-lock.json* ./
+COPY package.json package-lock.json ./
 RUN npm install
 
-# Copy Vite config
-COPY frontend/vite.config.js ./
-
-# Copy and position your HTML
-# (Vite expects index.html at the project root)
-COPY frontend/index.html ./
-
-# Copy all source code
-COPY frontend/src ./src/
+# Copy Vite config, HTML, and source code
+COPY vite.config.js ./
+COPY index.html ./
+COPY src ./src
 
 # Build the static assets
 RUN npm run build
@@ -51,7 +45,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Expose HTTP port
 EXPOSE 80
 
-# Run Nginx in foreground
+# Start Nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]
 
 
