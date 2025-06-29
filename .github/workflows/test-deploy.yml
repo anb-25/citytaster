@@ -2,8 +2,8 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]           # Trigger CD on push to main
-  workflow_dispatch:           # Allow manual deploy trigger
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -14,15 +14,15 @@ jobs:
       DB_NAME: CityTasterDB
 
     steps:
-      # Checkout latest code
+      # 1. Checkout latest code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Enable Docker Buildx for pushing to ECR
+      # 2. Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Configure AWS access
+      # 3. Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -30,39 +30,39 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Login to ECR
+      # 4. Login to ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Debug: Output AWS Account ID (will be masked if set correctly)
+      # 5. Debug AWS Account ID (should be masked)
       - name: Debug AWS_ACCOUNT_ID value
         run: |
           echo "Account ID is [${{ secrets.AWS_ACCOUNT_ID }}]"
 
-      # Backend: Build and push Docker image to ECR
+      # 6. Build and push backend Docker image (from root context)
       - name: Build and push backend Docker image
         run: |
           docker buildx build \
             --push \
             --file deployment/Dockerfile.backend \
             -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/citytaster-backend:latest" \
-            ./backend
+            .
 
-      # Frontend: Build and push Docker image to ECR
+      # 7. Build and push frontend Docker image (from root context)
       - name: Build and push frontend Docker image
         run: |
           docker buildx build \
             --push \
             --file deployment/Dockerfile.frontend \
             -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/citytaster-frontend:latest" \
-            ./frontend
+            .
 
-      # Sync data directory to S3
+      # 8. Sync data directory to S3
       - name: Sync data folder to S3
         run: |
           aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
-      # Deploy on EC2 via SSH with docker-compose
+      # 9. Deploy on EC2 via SSH with docker-compose
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
