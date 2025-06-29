@@ -14,23 +14,19 @@
 # ---- Base Image ----
 FROM python:3.10-slim
 
-# ---- Working Directory ----
 WORKDIR /app
 
 # ---- Install Dependencies ----
-# Copy requirements.txt from context root (so: backend/requirements.txt)
-COPY backend/requirements.txt ./requirements.txt
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ---- Copy Application Code ----
-# Copy all backend source files (e.g., app.py, db.py, .env, etc)
 COPY backend/. .
 
-# ---- Expose Port ----
 EXPOSE 5000
 
-# ---- Launch Command ----
 CMD ["python", "app.py"]
+
 
 
 
