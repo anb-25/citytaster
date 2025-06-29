@@ -2,8 +2,8 @@ name: CityTaster Deploy
 
 on:
   push:
-    branches: [main]  # Trigger deploy on push to main
-  workflow_dispatch:  # Allow manual deployment from GitHub UI
+    branches: [main]           # Trigger CD on push to main
+  workflow_dispatch:           # Manual deploy trigger
 
 jobs:
   deploy:
@@ -11,18 +11,18 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-      DB_NAME: CityTasterDB  # Example env var you may use in containers
+      DB_NAME: CityTasterDB    # Optional app-level variable
 
     steps:
-      # Checkout latest code from main branch
+      # Checkout latest code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Docker Buildx (for buildx support: cache, multi-arch, etc)
+      # Enable Docker Buildx for pushing to ECR
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Configure AWS credentials for CLI and Docker login
+      # Configure AWS access
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -30,49 +30,34 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Login to Amazon ECR to push images
+      # Login to ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Validate required secrets before build
-      - name: Validate secrets
-        run: |
-          missing=""
-          for var in AWS_ACCOUNT_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY S3_BUCKET_NAME EC2_PUBLIC_IP EC2_SSH_KEY; do
-            if [ -z "${{ secrets[$var] }}" ]; then
-              echo "❌ Missing secret: $var"
-              missing="yes"
-            fi
-          done
-          if [ "$missing" = "yes" ]; then
-            echo "💥 Aborting: one or more required secrets are missing."
-            exit 1
-          fi
-
-      # Build and push backend image to ECR
+      # Backend: Build and push Docker image to ECR
       - name: Build and push backend Docker image
         run: |
           docker buildx build \
             --push \
-            --file deployment/Dockerfile.backend \  # Backend Dockerfile path
-            -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/citytaster-backend:latest" \  # ECR image tag
-            ./backend  # Build context is ./backend folder
+            --file deployment/Dockerfile.backend \
+            -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/citytaster-backend:latest" \
+            ./backend
 
-      # Build and push frontend image to ECR
+      # Frontend: Build and push Docker image to ECR
       - name: Build and push frontend Docker image
         run: |
           docker buildx build \
             --push \
-            --file deployment/Dockerfile.frontend \  # Frontend Dockerfile path
-            -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/citytaster-frontend:latest" \  # ECR image tag
-            ./frontend  # Build context is ./frontend folder
+            --file deployment/Dockerfile.frontend \
+            -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/citytaster-frontend:latest" \
+            ./frontend
 
-      # Upload local data folder to S3 bucket for production use
+      # Sync data directory to S3
       - name: Sync data folder to S3
         run: |
           aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
 
-      # SSH into EC2 and deploy the latest images using docker-compose
+      # Deploy on EC2 via SSH with docker-compose
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -80,9 +65,9 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd app || (mkdir app && cd app)  # Ensure app directory exists
-            aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data  # Download latest data from S3
+            cd app || (mkdir app && cd app)
+            aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-            docker-compose pull  # Pull latest images
-            docker-compose up -d  # Launch services in detached mode
-            docker image prune -af  # Clean up unused images to save disk
+            docker-compose pull
+            docker-compose up -d
+            docker image prune -af
