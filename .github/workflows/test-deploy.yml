@@ -3,7 +3,7 @@ name: CityTaster Deploy
 on:
   push:
     branches: [main]           # Trigger CD on push to main
-  workflow_dispatch:           # Manual deploy trigger
+  workflow_dispatch:           # Allow manual deploy trigger
 
 jobs:
   deploy:
@@ -11,7 +11,7 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-      DB_NAME: CityTasterDB    # Optional app-level variable
+      DB_NAME: CityTasterDB
 
     steps:
       # Checkout latest code
@@ -33,6 +33,11 @@ jobs:
       # Login to ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
+
+      # Debug: Output AWS Account ID (will be masked if set correctly)
+      - name: Debug AWS_ACCOUNT_ID value
+        run: |
+          echo "Account ID is [${{ secrets.AWS_ACCOUNT_ID }}]"
 
       # Backend: Build and push Docker image to ECR
       - name: Build and push backend Docker image
@@ -71,3 +76,4 @@ jobs:
             docker-compose pull
             docker-compose up -d
             docker image prune -af
+
