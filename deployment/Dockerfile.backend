@@ -19,12 +19,12 @@ WORKDIR /app
 
 # ---- Install Dependencies ----
 # Copy requirements.txt from context root (so: backend/requirements.txt)
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r backend/requirements.txt
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # ---- Copy Application Code ----
 # Copy all backend source files (e.g., app.py, db.py, .env, etc)
-COPY backend/. . 
+COPY backend/. .
 
 # ---- Expose Port ----
 EXPOSE 5000
