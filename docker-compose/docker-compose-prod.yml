@@ -16,42 +16,42 @@
 
 # volumes: at the bottom defines named volumes used by services.
 
-version: '3'
+version: '3' # Use Compose version 3 syntax
+
 services:
   mongo:
     image: mongo:6.0
     container_name: citytaster-mongo
     restart: always
     environment:
-      MONGO_INITDB_DATABASE: ${DB_NAME}
+      MONGO_INITDB_DATABASE: ${DB_NAME}  # Name for MongoDB initialization
     ports:
-      - "27017:27017"
+      - "27017:27017"  # Expose MongoDB port
     volumes:
-      - mongo-data:/data/db
+      - mongo-data:/data/db  # Persist Mongo data
 
   backend:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-backend:latest
     container_name: citytaster-backend
     restart: always
-    env_file:
-      - ./backend/.env
+    # No env_file here—use the .env in the same dir as this YAML!
     environment:
-      DB_NAME: ${DB_NAME}
-      MONGO_URI: mongodb://mongo:27017/${DB_NAME}
+      DB_NAME: ${DB_NAME}  # DB name from .env
+      MONGO_URI: mongodb://mongo:27017/${DB_NAME} # Service-to-service link
     ports:
-      - "5000:5000"
+      - "5000:5000"  # Expose backend API port
     depends_on:
-      - mongo
+      - mongo  # Start only after MongoDB
 
   frontend:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-frontend:latest
     container_name: citytaster-frontend
     restart: always
     ports:
-      - "80:80"
+      - "80:80"  # Expose frontend web port
     depends_on:
-      - backend
+      - backend  # Start only after backend
 
 volumes:
   mongo-data:
-    driver: local
+    driver: local  # Use local volume for Mongo data
