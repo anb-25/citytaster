@@ -1,7 +1,7 @@
 # backend/seed.py
 from db import get_collection
 
-cities_col = get_collection("cities")
+cities_col = get_collection("city")
 food_col = get_collection("food")
 dessert_col = get_collection("dessert")
 
