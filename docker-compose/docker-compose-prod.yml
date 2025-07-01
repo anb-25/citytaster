@@ -16,7 +16,7 @@
 
 # volumes: at the bottom defines named volumes used by services.
 
-version: '3' # Use Compose version 3 syntax
+version: '3.9'
 
 services:
   mongo:
@@ -24,34 +24,39 @@ services:
     container_name: citytaster-mongo
     restart: always
     environment:
-      MONGO_INITDB_DATABASE: ${DB_NAME}  # Name for MongoDB initialization
+      MONGO_INITDB_DATABASE: ${DB_NAME}        # DB_NAME from .env file
     ports:
-      - "27017:27017"  # Expose MongoDB port
+      - "27017:27017"                          # Expose only if needed for admin
     volumes:
-      - mongo-data:/data/db  # Persist Mongo data
+      - mongo-data:/data/db                    # Persist Mongo data
 
   backend:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-backend:latest
     container_name: citytaster-backend
     restart: always
-    # No env_file here—use the .env in the same dir as this YAML!
+    env_file:
+      - ../backend/.env                        # Keep your secrets here
     environment:
-      DB_NAME: ${DB_NAME}  # DB name from .env
-      MONGO_URI: mongodb://mongo:27017/${DB_NAME} # Service-to-service link
+      DB_NAME: ${DB_NAME}                      # Set DB name for backend
+      MONGO_URI: mongodb://mongo:27017/${DB_NAME}
     ports:
-      - "5000:5000"  # Expose backend API port
+      - "5000:5000"                            # API port
     depends_on:
-      - mongo  # Start only after MongoDB
+      - mongo
 
   frontend:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-frontend:latest
     container_name: citytaster-frontend
     restart: always
     ports:
-      - "80:80"  # Expose frontend web port
+      - "80:80"                                # Serve via Nginx on port 80
     depends_on:
-      - backend  # Start only after backend
+      - backend
 
 volumes:
   mongo-data:
-    driver: local  # Use local volume for Mongo data
+    driver: local
+
+# Place this file at: citytaster/docker-compose/docker-compose-prod.yml
+# .env file should be in the same directory or referenced absolutely
+# Usage from root: docker compose -f docker-compose/docker-compose-prod.yml up -d
