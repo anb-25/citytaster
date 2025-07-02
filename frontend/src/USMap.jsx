@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-// Import map and marker components from react-simple-maps
+// Import map components from react-simple-maps
 import {
   ComposableMap,
   Geographies,
@@ -8,32 +8,43 @@ import {
   Marker,
 } from "react-simple-maps";
 
-// TopoJSON source for US state outlines
+// URL for US state shapes (TopoJSON)
 const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 
 export default function USMap() {
-  // Holds the list of cities fetched from backend
+  // Store the list of cities fetched from the backend
   const [cities, setCities] = useState([]);
-  // Used to programmatically navigate when a marker is clicked
+  // Used to programmatically navigate to a city page
   const navigate = useNavigate();
 
-  // Fetch city list when component mounts
+  // Fetch the city list from the API when component mounts
   useEffect(() => {
     fetch("/api/cities")
       .then((res) => res.json())
-      .then((data) => setCities(data));
+      .then((data) => {
+        // Only set cities if response is a valid array
+        if (Array.isArray(data)) {
+          setCities(data);
+        } else {
+          setCities([]); // fallback: set empty
+          console.error("API /api/cities returned non-array:", data);
+        }
+      })
+      .catch((err) => {
+        setCities([]); // fallback: set empty on error
+        console.error("Failed to fetch /api/cities:", err);
+      });
   }, []);
 
   return (
     <div>
-      {/* Map Page Title */}
+      {/* Page title section */}
       <h1 className="section-title">
-        CityTaster🍴🌎: Your one stop shop to food & dessert spots across the
-        U.S.
+        CityTaster 🍴: Your one stop shop to food & dessert spots across the U.S.
       </h1>
-      {/* Render US map using react-simple-maps */}
+      {/* Render the map using react-simple-maps */}
       <ComposableMap projection="geoAlbersUsa" width={1100} height={600}>
-        {/* Draw the states on the map */}
+        {/* Draw US states on the map */}
         <Geographies geography={geoUrl}>
           {({ geographies }) =>
             geographies.map((geo) => (
@@ -47,35 +58,39 @@ export default function USMap() {
           }
         </Geographies>
         {/* Place a marker and label for each city */}
-        {cities.map((city) => (
-          <Marker
-            key={city.city_id}
-            coordinates={[city.longitude, city.latitude]}
-            onClick={() => navigate(`/city/${city.city_id}`)} // Go to city page on click
-          >
-            {/* Orange map bubble/dot for the city */}
-            <circle r={11} fill="#FF5722" stroke="#fff" strokeWidth={3} />
-            {/* Small city name label below the marker */}
-            <text
-              y={22} // Vertical offset to position text below the dot; use negative value for above
-              textAnchor="middle"
-              style={{
-                fontSize: "12px", // Small, readable font
-                fontWeight: "bold",
-                fill: "#444", // Dark text color for contrast
-                pointerEvents: "none", // Allows clicking the marker even when label is on top
-                paintOrder: "stroke", // Ensures the stroke is drawn under the text fill
-                stroke: "#fff", // White border for better readability
-                strokeWidth: 3,
-                strokeLinejoin: "round",
-              }}
+        {Array.isArray(cities) &&
+          cities.map((city) => (
+            <Marker
+              // Unique key for React list rendering
+              key={city.city_id}
+              // Location of the marker (longitude, latitude)
+              coordinates={[city.longitude, city.latitude]}
+              // When marker is clicked, navigate to city details page
+              onClick={() => navigate(`/city/${city.city_id}`)}
             >
-              {city.city_name}
-              {/* Use {city.city_name.split(',')[0]} to display only the city (not state) if labels overlap */}
-            </text>
-          </Marker>
-        ))}
+              {/* Orange map bubble/dot for the city */}
+              <circle r={11} fill="#FF5722" stroke="#fff" strokeWidth={3} />
+              {/* Small city name label below the marker */}
+              <text
+                y={22} // Position the text below the dot
+                textAnchor="middle"
+                style={{
+                  fontSize: "12px", // Small, readable font
+                  fontWeight: "bold",
+                  fill: "#444", // Dark text color for contrast
+                  pointerEvents: "none", // Allows clicking the marker even when label is on top
+                  paintOrder: "stroke", // Ensures the stroke is drawn under the text fill
+                  stroke: "#fff", // White border for better readability
+                  strokeWidth: 3,
+                  strokeLinejoin: "round",
+                }}
+              >
+                {city.city_name}
+              </text>
+            </Marker>
+          ))}
       </ComposableMap>
     </div>
   );
 }
+
