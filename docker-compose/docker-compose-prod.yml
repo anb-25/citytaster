@@ -16,46 +16,65 @@
 
 # volumes: at the bottom defines named volumes used by services.
 
-version: '3.9'
-
 services:
+  # MongoDB Service
   mongo:
     image: mongo:6.0
     container_name: citytaster-mongo
     restart: always
     environment:
-      MONGO_INITDB_DATABASE: ${DB_NAME}        # DB_NAME from .env file
+      MONGO_INITDB_DATABASE: ${DB_NAME}  # DB_NAME from .env file
     ports:
-      - "27017:27017"                          # Expose only if needed for admin
+      - "27017:27017"  # Expose MongoDB to host for external tools/admin
     volumes:
-      - mongo-data:/data/db                    # Persist Mongo data
+      - mongo-data:/data/db  # Persist Mongo data
 
+  # Backend Service
   backend:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-backend:latest
     container_name: citytaster-backend
     restart: always
     env_file:
-      - ../backend/.env                        # Keep your secrets here
+      - ../backend/.env  # Load secrets/config from file
     environment:
-      DB_NAME: ${DB_NAME}                      # Set DB name for backend
-      MONGO_URI: mongodb://mongo:27017/${DB_NAME}
+      DB_NAME: ${DB_NAME}
+      MONGO_URI: mongodb://mongo:27017/${DB_NAME}  # Use service name 'mongo' for container comms
     ports:
-      - "5000:5000"                            # API port
+      - "5000:5000"  # Expose backend API
     depends_on:
-      - mongo
+      - mongo  # Start Mongo first
 
+  # Frontend Service
   frontend:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-frontend:latest
     container_name: citytaster-frontend
     restart: always
     ports:
-      - "80:80"                                # Serve via Nginx on port 80
+      - "80:80"  # Serve frontend via Nginx
     depends_on:
-      - backend
+      - backend  # Start backend first
+
+  # Seeder Service: runs Python script to seed DB, then exits
+  seed:
+    image: python:3.10
+    container_name: citytaster-seed
+    volumes:
+      - ./backend:/backend  # Mount backend code into container
+    working_dir: /backend
+    environment:
+      MONGO_HOST: mongo     # Use service name so it resolves
+      MONGO_PORT: 27017
+      MONGO_DB: ${DB_NAME}
+    command: python3 seed.py
+    depends_on:
+      - mongo
+    # Remove the container after it finishes
+    restart: "no"
 
 volumes:
   mongo-data:
     driver: local
+
 
 # Place this file at: citytaster/docker-compose/docker-compose-prod.yml
 # .env file should be in the same directory or referenced absolutely
