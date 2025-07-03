@@ -1,32 +1,37 @@
+// frontend/src/CityPage.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 export default function CityPage() {
-  const { city_id } = useParams(); // Get city id from URL
-  const [city, setCity] = useState(null); // State for current city data
+  // Get city id from route
+  const { city_id } = useParams();
+  // Hold city data, default to null
+  const [city, setCity] = useState(null);
   const navigate = useNavigate();
 
-  // Fetch city details on load or when city_id changes
+  // Fetch city details when city_id changes
   useEffect(() => {
     fetch(`/api/city/${city_id}`)
       .then((res) => res.json())
-      .then((data) => setCity(data));
+      .then((data) => {
+        console.log("Fetched city:", data);
+        setCity(data);
+      });
   }, [city_id]);
 
-  // Show loading until city loads
+  // Show loading spinner/text if city data is not yet loaded
   if (!city) return <div>Loading...</div>;
 
   return (
     <div>
-      {/* Back button */}
+      {/* Back to map */}
       <button className="btn" onClick={() => navigate("/")}>
         ← Back to Map
       </button>
 
-      {/* City name */}
+      {/* City Name */}
       <h1 className="section-title">{city.city_name}</h1>
-
-      {/* City description */}
+      {/* City Description */}
       <p className="city-description">{city.description}</p>
 
       {/* Optional city video link */}
@@ -41,7 +46,7 @@ export default function CityPage() {
         </a>
       )}
 
-      {/* Navigation buttons with spacing */}
+      {/* Food & Dessert navigation buttons */}
       <div style={{ marginTop: 32 }}>
         <button
           className="btn"
@@ -60,3 +65,6 @@ export default function CityPage() {
     </div>
   );
 }
+// This component fetches and displays details for a specific city.
+// It uses the city_id from the URL to fetch data from the backend API.
+// The city details include the name, description, and an optional video link.            

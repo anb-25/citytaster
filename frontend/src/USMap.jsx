@@ -1,6 +1,7 @@
+// frontend/src/USMap.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-// Import map components from react-simple-maps
+// Map component imports
 import {
   ComposableMap,
   Geographies,
@@ -12,39 +13,41 @@ import {
 const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 
 export default function USMap() {
-  // Store the list of cities fetched from the backend
-  const [cities, setCities] = useState([]);
-  // Used to programmatically navigate to a city page
+  // State for list of cities fetched from the backend
+  const [cities, setCities] = useState([]); // always start with []
+
+  // For navigation to city details pages
   const navigate = useNavigate();
 
-  // Fetch the city list from the API when component mounts
+  // Fetch city list from API on mount
   useEffect(() => {
     fetch("/api/cities")
       .then((res) => res.json())
       .then((data) => {
-        // Only set cities if response is a valid array
+        // Log for debugging
+        console.log("Fetched cities:", data);
         if (Array.isArray(data)) {
           setCities(data);
         } else {
-          setCities([]); // fallback: set empty
-          console.error("API /api/cities returned non-array:", data);
+          setCities([]);
+          console.error("API /api/cities did not return an array:", data);
         }
       })
       .catch((err) => {
-        setCities([]); // fallback: set empty on error
+        setCities([]);
         console.error("Failed to fetch /api/cities:", err);
       });
   }, []);
 
   return (
     <div>
-      {/* Page title section */}
+      {/* Page Title */}
       <h1 className="section-title">
         CityTaster 🍴: Your one stop shop to food & dessert spots across the U.S.
       </h1>
-      {/* Render the map using react-simple-maps */}
+      {/* Render US map using react-simple-maps */}
       <ComposableMap projection="geoAlbersUsa" width={1100} height={600}>
-        {/* Draw US states on the map */}
+        {/* Draw state geographies */}
         <Geographies geography={geoUrl}>
           {({ geographies }) =>
             geographies.map((geo) => (
@@ -61,26 +64,23 @@ export default function USMap() {
         {Array.isArray(cities) &&
           cities.map((city) => (
             <Marker
-              // Unique key for React list rendering
               key={city.city_id}
-              // Location of the marker (longitude, latitude)
               coordinates={[city.longitude, city.latitude]}
-              // When marker is clicked, navigate to city details page
               onClick={() => navigate(`/city/${city.city_id}`)}
             >
-              {/* Orange map bubble/dot for the city */}
+              {/* Orange dot for city */}
               <circle r={11} fill="#FF5722" stroke="#fff" strokeWidth={3} />
-              {/* Small city name label below the marker */}
+              {/* City label */}
               <text
-                y={22} // Position the text below the dot
+                y={22}
                 textAnchor="middle"
                 style={{
-                  fontSize: "12px", // Small, readable font
+                  fontSize: "12px",
                   fontWeight: "bold",
-                  fill: "#444", // Dark text color for contrast
-                  pointerEvents: "none", // Allows clicking the marker even when label is on top
-                  paintOrder: "stroke", // Ensures the stroke is drawn under the text fill
-                  stroke: "#fff", // White border for better readability
+                  fill: "#444",
+                  pointerEvents: "none",
+                  paintOrder: "stroke",
+                  stroke: "#fff",
                   strokeWidth: 3,
                   strokeLinejoin: "round",
                 }}
@@ -93,4 +93,22 @@ export default function USMap() {
     </div>
   );
 }
-
+// This component renders a US map with clickable markers for each city.
+// It fetches city data from the backend API and displays each city as a marker on the map.
+// Clicking a marker navigates to the city details page using React Router.
+// The map uses the react-simple-maps library for rendering the map and markers.
+// The cities state is initialized as an empty array and updated once the data is fetched.
+// The map is styled with a light gray background and orange markers for cities.
+// The city labels are styled with a bold font and a white stroke for better visibility.
+// The useEffect hook fetches the city data when the component mounts.
+// The navigate function from React Router is used to programmatically change routes.
+// The component handles cases where the API response is not an array by checking before setting the state.
+// The console.log statements help debug the fetched city data.
+// The component uses semantic HTML elements for better accessibility and SEO.
+// The map is responsive and adjusts to the size of the container.
+// The markers are positioned based on the longitude and latitude of each city.
+// The component is designed to be reusable and can be easily integrated into other parts of the application.
+// The CSS classes like "section-title" are assumed to be defined in an external stylesheet for consistent styling.
+// The component is structured to follow React best practices, ensuring maintainability and readability.
+// The use of arrow functions and destructuring enhances code clarity and conciseness.
+// The component is self-contained and does not rely on any external state management libraries.  

@@ -1,62 +1,74 @@
+// frontend/src/FoodPage.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 export default function FoodPage() {
-  const { city_id } = useParams(); // Get city id from URL
-  const [foodSpots, setFoodSpots] = useState([]); // State for food spots
+  // City id from route
+  const { city_id } = useParams();
+  // Hold food spots, always as array
+  const [foodSpots, setFoodSpots] = useState([]);
   const navigate = useNavigate();
 
-  // Fetch food spots for the city on mount or city_id change
+  // Fetch food spots for the city
   useEffect(() => {
     fetch(`/api/food/city/${city_id}`)
       .then((res) => res.json())
-      .then((data) => setFoodSpots(data));
+      .then((data) => {
+        console.log("Fetched food spots:", data);
+        setFoodSpots(Array.isArray(data) ? data : []);
+      });
   }, [city_id]);
 
   return (
     <div>
-      {/* Back button */}
+      {/* Back to City */}
       <button className="btn" onClick={() => navigate(-1)}>
         ← Back to City
       </button>
       <h2 className="section-title">Food Spots</h2>
       {/* Render a card for each food spot */}
-      {foodSpots.map((spot) => (
-        <div className="spot-card" key={spot._id}>
-          <h3>{spot.food_name}</h3>
-          <div className="star-rating">⭐ {spot.food_rating}</div>
-          <p>
-            <strong>Address:</strong> {spot.food_address}
-          </p>
-          <p>
-            <strong>Phone:</strong> {spot.food_number || "No Phone Number"}
-          </p>
-          <div className="spot-links">
-            {/* Website link */}
-            {spot.food_website && (
-              <a
-                href={spot.food_website}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Visit Website
-              </a>
-            )}
-            {/* Review link */}
-            {spot.content_link && (
-              <a
-                href={spot.content_link}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                View Reviews
-              </a>
-            )}
+      {Array.isArray(foodSpots) &&
+        foodSpots.map((spot) => (
+          <div className="spot-card" key={spot._id}>
+            <h3>{spot.food_name}</h3>
+            <div className="star-rating">⭐ {spot.food_rating}</div>
+            <p>
+              <strong>Address:</strong> {spot.food_address}
+            </p>
+            <p>
+              <strong>Phone:</strong> {spot.food_number || "No Phone Number"}
+            </p>
+            <div className="spot-links">
+              {/* Website link */}
+              {spot.food_website && (
+                <a
+                  href={spot.food_website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Visit Website
+                </a>
+              )}
+              {/* Review link */}
+              {spot.content_link && (
+                <a
+                  href={spot.content_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View Reviews
+                </a>
+              )}
+            </div>
+            {/* Description */}
+            <p>{spot.description}</p>
           </div>
-          {/* Food spot description */}
-          <p>{spot.description}</p>
-        </div>
-      ))}
+        ))}
     </div>
   );
 }
+// This component fetches and displays food spots for a specific city.
+// It uses the city_id from the URL to fetch data from the backend API.
+// Each food spot is displayed in a card format with details like name, rating, address,
+// phone number, website, and description.
+// The component also includes a back button to return to the previous page.
