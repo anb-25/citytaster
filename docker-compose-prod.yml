@@ -16,6 +16,7 @@
 
 # volumes: at the bottom defines named volumes used by services.
 
+
 version: '3.9'
 
 services:
@@ -25,11 +26,11 @@ services:
     container_name: citytaster-mongo
     restart: always
     environment:
-      MONGO_INITDB_DATABASE: ${DB_NAME}    # Get DB_NAME from .env (root for prod)
+      MONGO_INITDB_DATABASE: ${DB_NAME}         # Get DB_NAME from .env
     ports:
-      - "27017:27017"                      # Expose port for admin/dev
+      - "27017:27017"                           # Expose port for admin/dev
     volumes:
-      - mongo-data:/data/db                # Persist data on host
+      - mongo-data:/data/db                     # Persist data on host
 
   # --- Backend API Service ---
   backend:
@@ -37,16 +38,16 @@ services:
     container_name: citytaster-backend
     restart: always
     env_file:
-      - ./.env                            # Load all variables from root .env for prod
+      - ./.env                                  # Load variables from root .env for prod
     environment:
-      DB_NAME: ${DB_NAME}                  # Pass DB_NAME for compose/Mongo init
-      MONGO_DB: ${DB_NAME}                 # Pass MONGO_DB for Python code (db.py expects this)
-      MONGO_URI: mongodb://mongo:27017/${DB_NAME} # Use service name 'mongo' for host
-      # Add any other required vars here
+      DB_NAME: ${DB_NAME}                       # Pass DB_NAME for compose/Mongo init
+      MONGO_DB: ${DB_NAME}                      # For Python code (db.py expects this)
+      MONGO_URI: mongodb://mongo:27017/${DB_NAME}  # Use service name 'mongo' for host in Docker
+      # Add any extra environment variables if needed
     ports:
-      - "5000:5000"                        # Expose backend API port
+      - "5000:5000"                             # Expose backend API port
     depends_on:
-      - mongo                              # Ensure Mongo is up before backend
+      - mongo                                   # Ensure Mongo is up before backend
 
   # --- Frontend Service ---
   frontend:
@@ -54,32 +55,14 @@ services:
     container_name: citytaster-frontend
     restart: always
     ports:
-      - "80:80"                            # Serve app via Nginx or similar
+      - "80:80"                                 # Serve app via Nginx or similar
     depends_on:
-      - backend                            # Start after backend is up
+      - backend                                 # Start after backend is up
 
-  # --- Seeder Service: Seeds DB then exits ---
-  seed:
-    image: python:3.10
-    container_name: citytaster-seed
-    volumes:
-      - ./backend:/backend                # Mount backend code (seed.py etc)
-    working_dir: /backend
-    env_file:
-      - ./.env                            # Use root .env for prod
-    environment:
-      MONGO_HOST: mongo
-      MONGO_PORT: 27017
-      DB_NAME: ${DB_NAME}                  # Pass DB_NAME
-      MONGO_DB: ${DB_NAME}                 # Pass MONGO_DB for seed script/db.py
-    command: python3 seed.py
-    depends_on:
-      - mongo
-    restart: "no"                          # Remove after finishing
-
+# --- Volumes ---
 volumes:
   mongo-data:
-    driver: local                          # Named volume for persistent Mongo data
+    driver: local                               # Named volume for persistent Mongo data
 
 
 # Instructions:
