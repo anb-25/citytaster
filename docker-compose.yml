@@ -16,6 +16,7 @@
 
 # volumes: at the bottom defines named volumes used by services.
 
+version: '3.9'
 
 services:
   mongo:
@@ -31,23 +32,34 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ../backend                  # from docker-compose/ to backend/
       dockerfile: ../deployment/Dockerfile.backend
     container_name: citytaster-backend
+    restart: always
     env_file:
-      - ./backend/.env
+      - ../backend/.env
+    environment:
+      - FLASK_ENV=development
     ports:
       - "5000:5000"
+    volumes:
+      - ../backend:/app                   # mount backend code
     depends_on:
       - mongo
 
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: ../deployment/Dockerfile.frontend
     container_name: citytaster-frontend
+    restart: always
     ports:
-      - "3000:80"
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
 
@@ -55,3 +67,7 @@ volumes:
   mongo-data:
     driver: local
 
+# Place this file in: citytaster/docker-compose/docker-compose.yml
+# Use from root:
+#   docker compose -f docker-compose/docker-compose.yml up --build
+# Adjust context/paths if your structure changes!
