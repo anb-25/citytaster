@@ -37,7 +37,7 @@ services:
     container_name: citytaster-backend
     restart: always
     env_file:
-      - ../.env                            # Load all variables from root .env for prod
+      - ./.env                            # Load all variables from root .env for prod
     environment:
       DB_NAME: ${DB_NAME}                  # Pass DB_NAME for compose/Mongo init
       MONGO_DB: ${DB_NAME}                 # Pass MONGO_DB for Python code (db.py expects this)
@@ -63,10 +63,10 @@ services:
     image: python:3.10
     container_name: citytaster-seed
     volumes:
-      - ../backend:/backend                # Mount backend code (seed.py etc)
+      - ./backend:/backend                # Mount backend code (seed.py etc)
     working_dir: /backend
     env_file:
-      - ../.env                            # Use root .env for prod
+      - ./.env                            # Use root .env for prod
     environment:
       MONGO_HOST: mongo
       MONGO_PORT: 27017
