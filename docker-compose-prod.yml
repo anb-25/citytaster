@@ -16,7 +16,7 @@
 
 # volumes: at the bottom defines named volumes used by services.
 
-version: '3'
+version: '3.9'
 
 services:
   # --- MongoDB Service ---
@@ -25,9 +25,9 @@ services:
     container_name: citytaster-mongo
     restart: always
     environment:
-      MONGO_INITDB_DATABASE: ${DB_NAME}    # Use DB_NAME from .env for initial Mongo DB
+      MONGO_INITDB_DATABASE: ${DB_NAME}    # Get DB_NAME from .env (root for prod)
     ports:
-      - "27017:27017"                      # Expose port for admin/dev tools
+      - "27017:27017"                      # Expose port for admin/dev
     volumes:
       - mongo-data:/data/db                # Persist data on host
 
@@ -37,11 +37,11 @@ services:
     container_name: citytaster-backend
     restart: always
     env_file:
-      - ../backend/.env                    # Load all vars from .env
+      - ../.env                            # Load all variables from root .env for prod
     environment:
       DB_NAME: ${DB_NAME}                  # Pass DB_NAME for compose/Mongo init
       MONGO_DB: ${DB_NAME}                 # Pass MONGO_DB for Python code (db.py expects this)
-      MONGO_URI: mongodb://mongo:27017/${DB_NAME}  # Use service name 'mongo' for host
+      MONGO_URI: mongodb://mongo:27017/${DB_NAME} # Use service name 'mongo' for host
       # Add any other required vars here
     ports:
       - "5000:5000"                        # Expose backend API port
@@ -63,10 +63,10 @@ services:
     image: python:3.10
     container_name: citytaster-seed
     volumes:
-      - ./backend:/backend                 # Mount backend code (seed.py etc)
+      - ../backend:/backend                # Mount backend code (seed.py etc)
     working_dir: /backend
     env_file:
-      - ../backend/.env
+      - ../.env                            # Use root .env for prod
     environment:
       MONGO_HOST: mongo
       MONGO_PORT: 27017
@@ -79,7 +79,8 @@ services:
 
 volumes:
   mongo-data:
-    driver: local
+    driver: local                          # Named volume for persistent Mongo data
+
 
 # Instructions:
 # This Docker Compose file is designed for production deployment of the CityTaster application.
