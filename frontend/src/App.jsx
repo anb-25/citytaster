@@ -4,6 +4,7 @@ import USMap from "./USMap";
 import CityPage from "./CityPage";
 import FoodPage from "./FoodPage";
 import DessertPage from "./DessertPage";
+import DatenightPage from "./DatenightPage";
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="/city/:city_id" element={<CityPage />} />
           <Route path="/city/:city_id/food" element={<FoodPage />} />
           <Route path="/city/:city_id/dessert" element={<DessertPage />} />
+          <Route path="/city/:city_id/datenight" element={<DatenightPage />} />
         </Routes>
       </div>
     </Router>

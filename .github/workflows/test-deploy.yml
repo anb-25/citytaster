@@ -103,8 +103,19 @@ jobs:
             aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
             docker-compose pull
+
+            # === LOOP TO IMPORT ANY CSV AS COLLECTION ===
+            for csv in ./data/*.csv; do
+              collection=$(basename "$csv" .csv)
+              echo "[INFO] Importing $csv into MongoDB collection '$collection'..."
+              docker exec citytaster-mongo mongoimport \
+                --db CityTasterDB \
+                --collection "$collection" \
+                --type csv --headerline --file "/data/$collection.csv" --drop
+            done
             docker-compose up -d
             docker image prune -af
+
         env:
           AWS_REGION: ${{ env.AWS_REGION }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}

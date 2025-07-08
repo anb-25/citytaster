@@ -46,7 +46,7 @@ export default function CityPage() {
         </a>
       )}
 
-      {/* Food & Dessert navigation buttons */}
+      {/* Food & Dessert & Datenight navigation buttons */}
       <div style={{ marginTop: 32 }}>
         <button
           className="btn"
@@ -60,6 +60,13 @@ export default function CityPage() {
           onClick={() => navigate(`/city/${city_id}/dessert`)}
         >
           View Dessert Spots
+        </button>
+        <button
+          className="btn"
+          onClick={() => navigate(`/city/${city_id}/datenight`)}
+          style={{ marginLeft: "22px" }}
+        >
+          View Datenight Spots
         </button>
       </div>
     </div>

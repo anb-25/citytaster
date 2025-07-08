@@ -43,7 +43,7 @@ export default function USMap() {
     <div>
       {/* Page Title */}
       <h1 className="section-title">
-        CityTaster 🍴: Your one stop shop to food & dessert spots across the U.S.
+        CityTaster 🍴: Your one stop shop to food, dessert, & datenight spots across the U.S.
       </h1>
       {/* Render US map using react-simple-maps */}
       <ComposableMap projection="geoAlbersUsa" width={1100} height={600}>
