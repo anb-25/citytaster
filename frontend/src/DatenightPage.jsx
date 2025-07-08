@@ -4,30 +4,30 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 export default function DatenightPage() {
-  // Get city_id from route parameters
+  // Get city_id from route parameters (URL)
   const { city_id } = useParams();
 
-  // Store datenight spots (array of spots)
+  // datenightSpots holds the array of datenight spot objects
   const [datenightSpots, setDatenightSpots] = useState([]);
 
-  // Used for navigation (Back to City)
+  // Used to navigate back to city page
   const navigate = useNavigate();
 
-  // Fetch datenight spots for the city on component mount or city_id change
+  // Fetch datenight spots when component mounts or city_id changes
   useEffect(() => {
     fetch(`/api/datenight/city/${city_id}`)
       .then((res) => res.json())
       .then((data) => {
-        // Only update if result is array
+        // Only update if data is an array
         setDatenightSpots(Array.isArray(data) ? data : []);
       });
   }, [city_id]);
 
   return (
     <div>
-      {/* Back to City button */}
+      {/* Back button to return to City */}
       <button className="btn" onClick={() => navigate(-1)}>
-        ← Back to City
+        &larr; Back to City
       </button>
 
       <h2 className="section-title">Datenight Spots</h2>
@@ -37,29 +37,33 @@ export default function DatenightPage() {
         <div>No datenight spots found.</div>
       ) : (
         datenightSpots.map((spot, idx) => (
-          // Card for each datenight spot
+          // Render each datenight spot as a card
           <div className="spot-card" key={spot._id || idx}>
-            {/* Spot name */}
+            {/* Spot Name */}
             <h3>{spot.spot_name}</h3>
-            
-            {/* Rating (if exists) */}
+
+            {/* Rating (if present) */}
             <div className="star-rating">
-              {spot.spot_rating && <>⭐ {spot.spot_rating}</>}
+              {spot.spot_rating && (
+                <>
+                  &#11088; {spot.spot_rating}
+                </>
+              )}
             </div>
 
-            {/* Address (if exists) */}
+            {/* Address (if present) */}
             <p>
               <strong>Address:</strong> {spot.spot_address}
             </p>
 
-            {/* Phone number (if exists) */}
+            {/* Phone Number (if present) */}
             <p>
               <strong>Phone:</strong> {spot.spot_number || "No Phone Number"}
             </p>
 
             <div className="spot-links">
-              {/* Website link (optional) */}
-              {spot.spot_webiste && (
+              {/* Website link (if present) */}
+              {spot.spot_website && (
                 <a
                   href={spot.spot_website}
                   target="_blank"
@@ -69,7 +73,7 @@ export default function DatenightPage() {
                 </a>
               )}
 
-              {/* Content/Review link (optional) */}
+              {/* Content/Review link (if present) */}
               {spot.content_link && (
                 <a
                   href={spot.content_link}
@@ -81,7 +85,7 @@ export default function DatenightPage() {
               )}
             </div>
 
-            {/* Description (if exists) */}
+            {/* Description (if present) */}
             {spot.description && <p>{spot.description}</p>}
           </div>
         ))
@@ -89,5 +93,6 @@ export default function DatenightPage() {
     </div>
   );
 }
+
 // Note: Ensure that the backend API endpoint `/api/datenight/city/:city_id` is set up to return datenight spots for the given city_id.
 // The response should be an array of objects with the expected fields (spot_name, spot_rating, spot_address, spot_number, spot_website, content_link, description).  
