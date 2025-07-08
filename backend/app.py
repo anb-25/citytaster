@@ -67,6 +67,16 @@ def dessert_by_city(city_id):
     docs = coll.find({"city_id": city_id})
     return jsonify([serialize_doc(d) for d in docs])
 
+@app.route("/api/datenight/city/<int:city_id>")
+def datenight_by_city(city_id):
+    """
+    GET /api/datenight/city/<city_id>
+    • Fetch all datenight-spot docs whose city_id matches.
+    """
+    coll = get_collection("datenight")
+    docs = coll.find({"city_id": city_id})
+    return jsonify([serialize_doc(d) for d in docs])
+
 
 if __name__ == "__main__":
     # Bind to 0.0.0.0 so Docker can route in
