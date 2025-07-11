@@ -16,58 +16,57 @@
 
 # volumes: at the bottom defines named volumes used by services.
 
+
 version: '3.9'
 
 services:
+  # --- MongoDB Service ---
   mongo:
     image: mongo:6.0
     container_name: citytaster-mongo
     restart: always
     environment:
-      MONGO_INITDB_DATABASE: CityTasterDB
+      MONGO_INITDB_DATABASE: ${DB_NAME}         # Get DB_NAME from .env
     ports:
-      - "27017:27017"
+      - "27017:27017"                           # Expose port for admin/dev
     volumes:
-      - mongo-data:/data/db
+      - mongo-data:/data/db                     # Persist data on host
 
+  # --- Backend API Service ---
   backend:
-    build:
-      context: ../backend                  # from docker-compose/ to backend/
-      dockerfile: ../deployment/Dockerfile.backend
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-backend:latest
     container_name: citytaster-backend
     restart: always
     env_file:
-      - ../backend/.env
+      - ./.env                                  # Load variables from root .env for prod
     environment:
-      - FLASK_ENV=development
+      DB_NAME: ${DB_NAME}                       # Pass DB_NAME for compose/Mongo init
+      MONGO_DB: ${DB_NAME}                      # For Python code (db.py expects this)
+      MONGO_URI: mongodb://mongo:27017/${DB_NAME}  # Use service name 'mongo' for host in Docker
+      # Add any extra environment variables if needed
     ports:
-      - "5000:5000"
-    volumes:
-      - ../backend:/app                   # mount backend code
+      - "5000:5000"                             # Expose backend API port
     depends_on:
-      - mongo
+      - mongo                                   # Ensure Mongo is up before backend
 
+  # --- Frontend Service ---
   frontend:
-    build:
-      context: ../frontend
-      dockerfile: ../deployment/Dockerfile.frontend
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/citytaster-frontend:latest
     container_name: citytaster-frontend
     restart: always
     ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-    volumes:
-      - ../frontend:/app
-      - /app/node_modules
+      - "80:80"                                 # Serve app via Nginx or similar
     depends_on:
-      - backend
+      - backend                                 # Start after backend is up
 
+# --- Volumes ---
 volumes:
   mongo-data:
-    driver: local
+    driver: local                               # Named volume for persistent Mongo data
 
-# Place this file in: citytaster/docker-compose/docker-compose.yml
-# Use from root:
-#   docker compose -f docker-compose/docker-compose.yml up --build
-# Adjust context/paths if your structure changes!
+
+# Instructions:
+# This Docker Compose file is designed for production deployment of the CityTaster application.
+# Place this file at: citytaster/docker-compose/docker-compose-prod.yml
+# .env file should be in the same directory or referenced absolutely
+# Usage from root: docker compose -f docker-compose/docker-compose-prod.yml up -d

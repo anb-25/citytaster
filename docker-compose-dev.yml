@@ -1,0 +1,73 @@
+# Purpose of key sections
+
+# mongo service: Runs MongoDB in its own container.
+
+# volumes: ensures /data/db (where Mongo stores its files) is stored on the Docker host, so your data won’t vanish when the container restarts.
+
+# backend service: Builds and runs your Flask API.
+
+# env_file: loads secrets and connection info from your .env.
+
+# depends_on: waits for Mongo to be ready.
+
+# frontend service: Builds the React app and serves it via Nginx.
+
+# Maps port 3000 on the host so you can browse to http://localhost:3000.
+
+# volumes: at the bottom defines named volumes used by services.
+
+version: '3.9'
+
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: citytaster-mongo
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: CityTasterDB
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  backend:
+    build:
+      context: ../backend                  # from docker-compose/ to backend/
+      dockerfile: ../deployment/Dockerfile.backend
+    container_name: citytaster-backend
+    restart: always
+    env_file:
+      - ../backend/.env
+    environment:
+      - FLASK_ENV=development
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../backend:/app                   # mount backend code
+    depends_on:
+      - mongo
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../deployment/Dockerfile.frontend
+    container_name: citytaster-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:
+    driver: local
+
+# Place this file in: citytaster/docker-compose/docker-compose.yml
+# Use from root:
+#   docker compose -f docker-compose/docker-compose.yml up --build
+# Adjust context/paths if your structure changes!
