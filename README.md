@@ -81,6 +81,7 @@ citytaster/
 ├── Makefile # Project commands
 ├── deploy.ps1  # Windows deployment automation
 ├── .gitignore  # Sensitive files excluded from git
+├── README.md #README file
 
 
 ---
@@ -121,18 +122,24 @@ citytaster/
 ## Infrastructure as Code (Terraform)
 All Terraform code is in the infra/ folder:
 
-main.tf, ec2.tf, ecr.tf, s3.tf, security.tf, iam.tf, vpc.tf, etc.
+- main.tf
+- ec2.tf 
+- ecr.tf
+- s3.tf
+- security.tf
+- iam.tf
+- vpc.tf 
+- etc.
 
 Provision AWS resources:
-cd infra
-terraform init
-terraform plan
-terraform apply
-Deploys VPC, EC2, S3, IAM roles, ECR for Docker images, and all networking.
+- cd infra
+- terraform init
+- terraform plan
+- terraform apply
+- Deploys VPC, EC2, S3, IAM roles, ECR for Docker images, and all networking.
 
 ## Notable Project Files
-.gitignore
-Ensures sensitive files like .env, node_modules/, and build artifacts are not committed.
+.gitignore: Ensures sensitive files like .env, node_modules/, and build artifacts are not committed.
 
 Makefile
 Provides shortcut commands for building, running, and managing the project.
@@ -144,20 +151,18 @@ Examples:
 
     make down — Stop all containers
 
-deploy.ps1
-Windows PowerShell script to automate deployment steps.
+deploy.ps1: Windows PowerShell script to automate deployment steps.
 
 Development Tips
-
-Environment Variables:
-Never commit .env or secret keys to Git.
-All sensitive configuration is loaded from .env (see .gitignore).
+- Environment Variables:
+    - Never commit .env or secret keys to Git.
+    - All sensitive configuration is loaded from .env (see .gitignore).
 
 Adding new cities or spots:
-Update your MongoDB data and restart the backend container.
+- Update your MongoDB data and restart the backend container.
 
 Expanding Infrastructure:
-Update Terraform scripts in infra/ and re-apply with terraform apply.
+- Update Terraform scripts in infra/ and re-apply with terraform apply.
 
 ## Contributing
 Pull requests and issues are welcome! Please open an issue first to discuss changes.
