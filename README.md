@@ -131,6 +131,11 @@ All Terraform code is in the infra/ folder:
 - vpc.tf 
 - etc.
 
+Notable Scripts: 
+- `update.sh`: Automates pulling latest code, syncing S3 data, logging into ECR, importing CSVs to MongoDB, and redeploying 
+
+- `user_data.sh`: Bootstraps EC2 instance (Docker, AWS CLI, git, clone, setup)
+
 Provision AWS resources:
 - cd infra
 - terraform init
@@ -139,19 +144,19 @@ Provision AWS resources:
 - Deploys VPC, EC2, S3, IAM roles, ECR for Docker images, and all networking.
 
 ## Notable Project Files
-.gitignore: Ensures sensitive files like .env, node_modules/, and build artifacts are not committed.
+- `.gitignore`: Ensures sensitive files like .env, node_modules, and build artifacts are not committed
+- **Makefile:** Provides shortcut commands for building, running, and managing the project  
+  Examples:
+    ```
+    make up         # Start dev environment with Docker Compose
+    make build      # Build Docker images
+    make down       # Stop all containers
+    ```
 
-Makefile
-Provides shortcut commands for building, running, and managing the project.
-Examples:
+- **deploy.ps1:** Windows PowerShell script to automate deployment steps (prod/dev switch)
+- **infra/update.sh:** Bash script for code/data sync and MongoDB import on EC2
+- **infra/user_data.sh:** Bash script for EC2 provisioning, code pull, and Docker Compose start
 
-    make up — Start dev environment with Docker Compose
-
-    make build — Build Docker images
-
-    make down — Stop all containers
-
-deploy.ps1: Windows PowerShell script to automate deployment steps.
 
 Development Tips
 - Environment Variables:
