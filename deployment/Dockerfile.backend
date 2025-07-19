@@ -27,6 +27,7 @@ EXPOSE 5000
 
 CMD ["python", "app.py"]
 
-
+# This Dockerfile builds a Flask backend application.
+# It uses a slim Python base image to minimize size and installs dependencies before copying the application code   
 
 
