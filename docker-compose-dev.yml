@@ -67,7 +67,7 @@ volumes:
   mongo-data:
     driver: local
 
-# Place this file in: citytaster/docker-compose/docker-compose.yml
+# Place this file in: citytaster/docker-compose/docker-compose-dev.yml
 # Use from root:
-#   docker compose -f docker-compose/docker-compose.yml up --build
+#   docker compose -f docker-compose/docker-compose-dev.yml up --build
 # Adjust context/paths if your structure changes!

@@ -67,6 +67,6 @@ volumes:
 
 # Instructions:
 # This Docker Compose file is designed for production deployment of the CityTaster application.
-# Place this file at: citytaster/docker-compose/docker-compose-prod.yml
+# Place this file at: citytaster/docker-compose/docker-compose.yml
 # .env file should be in the same directory or referenced absolutely
-# Usage from root: docker compose -f docker-compose/docker-compose-prod.yml up -d
+# Usage from root: docker compose -f docker-compose/docker-compose.yml up -d
