@@ -1,4 +1,6 @@
 # infra/security.tf
+# PURPOSE: Creates security groups to control inbound traffic to EC2 (SSH, HTTP, Frontend, Backend/API).
+
 
 # Security Group for EC2 instance (web server, SSH, frontend, backend)
 resource "aws_security_group" "ec2" {

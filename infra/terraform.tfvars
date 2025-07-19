@@ -1,3 +1,5 @@
+# PURPOSE: Provides concrete values for Terraform variables (region, key name, resource IDs, secrets).
+
 # The AWS region to deploy to (default: us-east-1, N. Virginia)
 aws_region = "us-east-1"
 

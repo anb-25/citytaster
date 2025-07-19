@@ -1,4 +1,6 @@
 # infra/ecr.tf
+# PURPOSE: Creates AWS ECR repositories for backend and frontend Docker images.
+
 
 # ECR repository for backend service
 resource "aws_ecr_repository" "backend" {

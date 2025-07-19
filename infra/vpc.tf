@@ -1,4 +1,6 @@
 # infra/vpc.tf
+# PURPOSE: Defines the network infrastructure including VPC, public/private subnets, and internet gateway.
+
 
 # Create a VPC (your private AWS network)
 resource "aws_vpc" "main" {

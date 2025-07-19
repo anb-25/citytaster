@@ -1,4 +1,6 @@
 # infra/outputs.tf
+# PURPOSE: Outputs important information such as EC2 IP/DNS, S3 bucket name, ECR repo URIs, and AWS account ID.
+
 
 # Output the public IP address of the EC2 instance (use to SSH or set as GitHub secret)
 output "ec2_public_ip" {

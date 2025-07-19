@@ -1,4 +1,6 @@
 # infra/ec2.tf
+# PURPOSE: Provisions the EC2 instance for deployment, configures AMI, networking, and user data for initialization.
+
 
 # Ubuntu 22.04 LTS AMI for us-east-1 (check for latest AMI if needed)
 data "aws_ami" "ubuntu" {

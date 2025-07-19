@@ -1,4 +1,6 @@
 # infra/main.tf
+# PURPOSE: Root Terraform configuration. Sets AWS provider, region, and version constraints for infrastructure deployment.
+
 
 # This block tells Terraform which cloud provider (AWS) and which region to use.
 provider "aws" {

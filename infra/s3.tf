@@ -1,4 +1,6 @@
 # infra/s3.tf
+# PURPOSE: Creates an S3 bucket for storing CSV/data files, ensuring global uniqueness with a random suffix.
+
 
 # S3 bucket to store CSV/data files
 resource "aws_s3_bucket" "csv_data" {

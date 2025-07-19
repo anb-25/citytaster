@@ -1,4 +1,6 @@
 # infra/iam.tf
+# PURPOSE: Configures IAM roles and policies to grant EC2 permissions for accessing ECR and S3.
+
 
 # IAM Role that the EC2 instance will assume to get AWS permissions
 resource "aws_iam_role" "ec2_role" {

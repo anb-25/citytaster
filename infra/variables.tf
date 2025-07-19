@@ -1,4 +1,6 @@
 # infra/variables.tf
+# PURPOSE: Defines input variables for region, instance type, key name, database name, and sensitive deploy key.
+
 
 # AWS region to deploy resources in; defaults to us-east-1 (N. Virginia, free tier eligible)
 variable "aws_region" {
