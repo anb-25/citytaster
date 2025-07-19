@@ -35,19 +35,6 @@ CityTaster is a full-stack web app that lets users browse curated lists of the b
 
 ---
 
-## Tech Stack 
-- Frontend: React, Vite, TailwindCSS, D3, React Simple Maps, Axios, Nginx (prod)
-
-- Backend: Python Flask, PyMongo
-
-- Database: MongoDB (Dockerized)
-
-- Deployment: Docker Compose, Nginx, AWS (via Terraform)
-
-- Infrastructure as Code: Terraform (EC2, S3, VPC, ECR, IAM)
-
-- CI/CD: GitHub Actions (example, if used)
-
 ## Screenshots
 
 | Map View                   | City Page            | Food Spots            | Dessert Spots          | Date Night Spots        |
