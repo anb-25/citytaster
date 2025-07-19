@@ -14,7 +14,7 @@ aws ecr get-login-password --region $AWS_REGION | \
   docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
 echo "[INFO] Pulling new Docker images..."
-docker compose -f docker-compose-prod.yml pull
+docker compose -f docker-compose.yml pull
 
 # --- LOOP OVER ALL CSV FILES ---
 for csv in ./data/*.csv; do
