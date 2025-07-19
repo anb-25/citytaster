@@ -27,7 +27,7 @@ for csv in ./data/*.csv; do
 done
 
 echo "[INFO] Redeploying stack..."
-docker compose -f docker-compose-prod.yml up -d
+docker compose -f docker-compose.yml up -d
 
 echo "[SUCCESS] All updates complete!"
 

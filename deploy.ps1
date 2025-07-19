@@ -4,10 +4,10 @@ param (
 )
 
 if ($env -eq "prod") {
-    $composeFile = "docker-compose-prod.yml"
+    $composeFile = "docker-compose.yml"
     Write-Host "Deploying with production settings..."
 } else {
-    $composeFile = "docker-compose.yml"
+    $composeFile = "docker-compose-dev.yml"
     Write-Host "Deploying with local/dev settings..."
 }
 
