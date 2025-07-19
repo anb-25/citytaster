@@ -86,9 +86,10 @@ citytaster/
 
 3. **Start with Docker Compose:**
     ```bash
-    docker compose up --build
+    docker compose up --build 
     ```
     - The app should be available at [http://localhost:3000](http://localhost:3000).
+    - For local and dev environments, use the docker-compose-dev.yml file
 
 ---
 
@@ -96,7 +97,7 @@ citytaster/
 
 1. **Build images and run using production compose:**
     ```bash
-    docker compose -f docker-compose-prod.yml up -d
+    docker compose -f docker-compose.yml up -d
     ```
 
 2. **Configure your AWS credentials** as needed.
