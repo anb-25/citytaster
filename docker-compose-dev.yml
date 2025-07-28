@@ -32,8 +32,8 @@ services:
 
   backend:
     build:
-      context: .                  # use current directory as context
-      dockerfile: ./deployment/Dockerfile.backend
+      context: ./backend                  # use current directory as context
+      dockerfile: Dockerfile.dev
     container_name: citytaster-backend
     restart: always
     env_file:
@@ -49,12 +49,12 @@ services:
 
   frontend:
     build:
-      context: .              # use current directory as context
-      dockerfile: ./deployment/Dockerfile.frontend
+      context: ./frontend              # use current directory as context
+      dockerfile: Dockerfile.dev
     container_name: citytaster-frontend
     restart: always
     ports:
-      - "3000:3000"
+      - "5173:5173"                # Vite dev server port
     environment:
       - NODE_ENV=development
     volumes:
