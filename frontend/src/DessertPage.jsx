@@ -1,45 +1,66 @@
-// frontend/src/DessertPage.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 export default function DessertPage() {
-  // City id from route
   const { city_id } = useParams();
-  // Hold dessert spots, always as array
   const [dessertSpots, setDessertSpots] = useState([]);
   const navigate = useNavigate();
 
-  // Fetch dessert spots for the city
   useEffect(() => {
     fetch(`/api/dessert/city/${city_id}`)
       .then((res) => res.json())
       .then((data) => {
-        console.log("Fetched dessert spots:", data);
-        setDessertSpots(Array.isArray(data) ? data : []);
+        if (Array.isArray(data)) {
+          // Normalize/clean fields
+          const normalized = data.map((spot) => ({
+            _id: spot._id,
+            dessert_name: spot.dessert_name || "Unnamed Dessert",
+            dessert_rating: spot.dessert_rating || null,
+            dessert_address: spot.dessert_address || "No Address",
+            dessert_number: spot.dessert_number || "N/A",
+            dessert_website: spot.dessert_website || null,
+            content_link: spot.content_link || null,
+            description: spot.description || "",
+          }));
+          setDessertSpots(normalized);
+        } else {
+          setDessertSpots([]);
+          console.error("Dessert API did not return an array:", data);
+        }
+      })
+      .catch((err) => {
+        setDessertSpots([]);
+        console.error("Failed to fetch dessert spots:", err);
       });
   }, [city_id]);
 
   return (
     <div>
-      {/* Back to City */}
       <button className="btn" onClick={() => navigate(-1)}>
         ← Back to City
       </button>
       <h2 className="section-title">Dessert Spots</h2>
-      {/* Render a card for each dessert spot */}
-      {Array.isArray(dessertSpots) &&
+
+      {dessertSpots.length === 0 ? (
+        <div>No dessert spots found.</div>
+      ) : (
         dessertSpots.map((spot) => (
           <div className="spot-card" key={spot._id}>
             <h3>{spot.dessert_name}</h3>
-            <div className="star-rating">⭐ {spot.dessert_rating}</div>
+
+            {spot.dessert_rating && (
+              <div className="star-rating">⭐ {spot.dessert_rating}</div>
+            )}
+
             <p>
               <strong>Address:</strong> {spot.dessert_address}
             </p>
+
             <p>
-              <strong>Phone:</strong> {spot.dessert_number || "No Phone Number"}
+              <strong>Phone:</strong> {spot.dessert_number}
             </p>
+
             <div className="spot-links">
-              {/* Website link */}
               {spot.dessert_website && (
                 <a
                   href={spot.dessert_website}
@@ -49,7 +70,6 @@ export default function DessertPage() {
                   Visit Website
                 </a>
               )}
-              {/* Review link */}
               {spot.content_link && (
                 <a
                   href={spot.content_link}
@@ -60,13 +80,15 @@ export default function DessertPage() {
                 </a>
               )}
             </div>
-            {/* Description */}
-            <p>{spot.description}</p>
+
+            {spot.description && <p>{spot.description}</p>}
           </div>
-        ))}
+        ))
+      )}
     </div>
   );
 }
+
 // This component fetches and displays dessert spots for a specific city.
 // It uses the city_id from the URL to fetch dessert data from the API.
 // Each dessert spot is displayed in a card format with details like name, rating, address,

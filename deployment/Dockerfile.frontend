@@ -29,7 +29,7 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm install
 
 # Copy Vite config, HTML, and source code
-COPY frontend/vite.config.js ./
+COPY frontend/vite.config.mjs ./
 COPY frontend/index.html ./
 COPY frontend/src ./src
 

@@ -1,45 +1,66 @@
-// frontend/src/FoodPage.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 export default function FoodPage() {
-  // City id from route
   const { city_id } = useParams();
-  // Hold food spots, always as array
   const [foodSpots, setFoodSpots] = useState([]);
   const navigate = useNavigate();
 
-  // Fetch food spots for the city
   useEffect(() => {
     fetch(`/api/food/city/${city_id}`)
       .then((res) => res.json())
       .then((data) => {
-        console.log("Fetched food spots:", data);
-        setFoodSpots(Array.isArray(data) ? data : []);
+        if (Array.isArray(data)) {
+          // Normalize food data
+          const normalized = data.map((spot) => ({
+            _id: spot._id,
+            food_name: spot.food_name || "Unnamed Food",
+            food_rating: spot.food_rating || null,
+            food_address: spot.food_address || "No Address",
+            food_number: spot.food_number || "N/A",
+            food_website: spot.food_website || null,
+            content_link: spot.content_link || null,
+            description: spot.description || "",
+          }));
+          setFoodSpots(normalized);
+        } else {
+          setFoodSpots([]);
+          console.error("Food API did not return an array:", data);
+        }
+      })
+      .catch((err) => {
+        setFoodSpots([]);
+        console.error("Failed to fetch food spots:", err);
       });
   }, [city_id]);
 
   return (
     <div>
-      {/* Back to City */}
       <button className="btn" onClick={() => navigate(-1)}>
         ← Back to City
       </button>
       <h2 className="section-title">Food Spots</h2>
-      {/* Render a card for each food spot */}
-      {Array.isArray(foodSpots) &&
+
+      {foodSpots.length === 0 ? (
+        <div>No food spots found.</div>
+      ) : (
         foodSpots.map((spot) => (
           <div className="spot-card" key={spot._id}>
             <h3>{spot.food_name}</h3>
-            <div className="star-rating">⭐ {spot.food_rating}</div>
+
+            {spot.food_rating && (
+              <div className="star-rating">⭐ {spot.food_rating}</div>
+            )}
+
             <p>
               <strong>Address:</strong> {spot.food_address}
             </p>
+
             <p>
-              <strong>Phone:</strong> {spot.food_number || "No Phone Number"}
+              <strong>Phone:</strong> {spot.food_number}
             </p>
+
             <div className="spot-links">
-              {/* Website link */}
               {spot.food_website && (
                 <a
                   href={spot.food_website}
@@ -49,7 +70,6 @@ export default function FoodPage() {
                   Visit Website
                 </a>
               )}
-              {/* Review link */}
               {spot.content_link && (
                 <a
                   href={spot.content_link}
@@ -60,13 +80,15 @@ export default function FoodPage() {
                 </a>
               )}
             </div>
-            {/* Description */}
-            <p>{spot.description}</p>
+
+            {spot.description && <p>{spot.description}</p>}
           </div>
-        ))}
+        ))
+      )}
     </div>
   );
 }
+
 // This component fetches and displays food spots for a specific city.
 // It uses the city_id from the URL to fetch data from the backend API.
 // Each food spot is displayed in a card format with details like name, rating, address,
