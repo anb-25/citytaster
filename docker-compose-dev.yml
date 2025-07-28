@@ -32,25 +32,25 @@ services:
 
   backend:
     build:
-      context: ../backend                  # from docker-compose/ to backend/
-      dockerfile: ../deployment/Dockerfile.backend
+      context: .                  # use current directory as context
+      dockerfile: ./deployment/Dockerfile.backend
     container_name: citytaster-backend
     restart: always
     env_file:
-      - ../backend/.env
+      - ./backend/.env
     environment:
       - FLASK_ENV=development
     ports:
       - "5000:5000"
     volumes:
-      - ../backend:/app                   # mount backend code
+      - ./backend:/app                   # mount backend code
     depends_on:
       - mongo
 
   frontend:
     build:
-      context: ../frontend
-      dockerfile: ../deployment/Dockerfile.frontend
+      context: .              # use current directory as context
+      dockerfile: ./deployment/Dockerfile.frontend
     container_name: citytaster-frontend
     restart: always
     ports:
@@ -58,7 +58,7 @@ services:
     environment:
       - NODE_ENV=development
     volumes:
-      - ../frontend:/app
+      - ./frontend:/app
       - /app/node_modules
     depends_on:
       - backend

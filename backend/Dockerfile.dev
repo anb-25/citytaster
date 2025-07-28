@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install watchdog  # Enables --reload (optional if already in requirements.txt)
+
+EXPOSE 5000
+
+CMD ["flask", "run", "--host=0.0.0.0", "--port=5000", "--reload"]
+# This Dockerfile sets up a Python Flask backend with live reloading enabled.
+# It uses a slim Python image, installs dependencies, and exposes port 5000.
+# for serving the application.
+# The CMD command runs the Flask server with live reloading enabled.
+# and only copying the necessary files.
+# It first builds the React app using Vite, then serves the static files with Ngin
