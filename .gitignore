@@ -28,4 +28,5 @@ rootkey.csv
 .env.*
 **/.env.*
 
-/infra/terraform.tfvars
+**/terraform.tfvars
+# Ignore Terraform variables file
