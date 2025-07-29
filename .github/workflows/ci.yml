@@ -84,7 +84,7 @@ jobs:
 
       # --- Build Docker Images (Check) ---
       - name: Build backend Docker image
-        run: docker build -f Dockerfile.dev -t citytaster-backend ./backend
+        run: docker build -f backend/Dockerfile.dev -t citytaster-backend ./backend
 
       - name: Build frontend Docker image
-        run: docker build -f Dockerfile.dev -t citytaster-frontend ./frontend
+        run: docker build -f frontend/Dockerfile.dev -t citytaster-frontend ./frontend
