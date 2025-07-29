@@ -28,4 +28,4 @@ rootkey.csv
 .env.*
 **/.env.*
 
-/infra/terraform.tf.vars
+/infra/terraform.tfvars
