@@ -88,7 +88,7 @@ citytaster/
     ```bash
     docker compose up --build 
     ```
-    - The app should be available at [http://localhost:3000](http://localhost:3000).
+    - The app should be available at [http://localhost:5173](http://localhost:5173).
     - For local and dev environments, use the docker-compose-dev.yml file
 
 ---
