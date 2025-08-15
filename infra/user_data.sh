@@ -22,7 +22,7 @@ ssh-keyscan github.com >> /home/ubuntu/.ssh/known_hosts
 chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
 
 # ====== Clone Repo ======
-sudo -u ubuntu git clone git@github.com:noob-developer25/citytaster.git /home/ubuntu/app
+sudo -u ubuntu git clone git@github.com:anb-25/citytaster.git /home/ubuntu/app
 
 # ====== Download CSVs from S3 ======
 sudo -u ubuntu aws s3 sync s3://${S3_BUCKET_NAME}/data /home/ubuntu/app/data --region ${AWS_REGION}
