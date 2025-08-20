@@ -35,7 +35,7 @@ jobs:
 
       # --- (Current) Access keys path (works today; rotate regularly) --
       - name: Configure AWS credentials (access keys)
-        if: ${{ !env.AWS_ROLE_TO_ASSUME }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' || env.AWS_ROLE_TO_ASSUME == null }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -46,6 +46,7 @@ jobs:
       # PURPOSE: avoid hardcoding ECR/S3/EC2 info in Secrets.
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+
       - name: Read Terraform outputs (if backend configured)
         id: tf
         shell: bash
@@ -59,25 +60,36 @@ jobs:
           #   -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
           terraform -chdir="$ENV_DIR" init -input=false >/dev/null 2>&1 || true
           terraform -chdir="$ENV_DIR" output -json >/tmp/outs.json || echo '{}' >/tmp/outs.json
+          # Export each output as an env var (key=value)
           jq -r 'to_entries[] | "\(.key)=\(.value.value)"' /tmp/outs.json | tee -a "$GITHUB_ENV" || true
-          # Exposes: ecr_backend_url, ecr_frontend_url, s3_bucket_name, aws_account_id, ec2_public_ip (if applied)
+          # Exposes (if defined in TF): ecr_backend_url, ecr_frontend_url, s3_bucket_name, aws_account_id, ec2_public_ip
 
-      # --- Ensure repos exist, login to ECR --------------------------------
+      # --- Normalize/fallback common env from TF -> Secrets --------------
+      - name: Set AWS account id (fallback)
+        shell: bash
+        run: |
+          val="${{ env.aws_account_id }}"
+          if [ -z "$val" ] || [ "$val" = "null" ]; then
+            val="${{ secrets.AWS_ACCOUNT_ID }}"
+          fi
+          echo "AWS_ACCOUNT_ID=$val" >> "$GITHUB_ENV"
+
+      # --- Ensure repos exist, login to ECR ------------------------------
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       # Derive ECR repo URLs if TF outputs aren't available yet
       - name: Derive ECR URLs (fallback)
-        if: ${{ !env.ecr_backend_url || !env.ecr_frontend_url }}
+        if: ${{ env.ecr_backend_url == '' || env.ecr_backend_url == null || env.ecr_frontend_url == '' || env.ecr_frontend_url == null }}
         run: |
-          echo "ecr_backend_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-backend" >> $GITHUB_ENV
-          echo "ecr_frontend_url=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-frontend" >> $GITHUB_ENV
+          echo "ecr_backend_url=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-backend" >> $GITHUB_ENV
+          echo "ecr_frontend_url=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-frontend" >> $GITHUB_ENV
 
-      # --- Buildx for multi-arch -------------------------------------------
+      # --- Buildx for multi-arch ----------------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --- Build & push backend --------------------------------------------
+      # --- Build & push backend -----------------------------------------
       - name: Build and push backend Docker image
         run: |
           docker buildx build \
@@ -86,7 +98,7 @@ jobs:
             -t "${{ env.ecr_backend_url }}:latest" \
             .
 
-      # --- Build & push frontend -------------------------------------------
+      # --- Build & push frontend ----------------------------------------
       - name: Build and push frontend Docker image
         run: |
           docker buildx build \
@@ -95,70 +107,120 @@ jobs:
             -t "${{ env.ecr_frontend_url }}:latest" \
             .
 
-      # --- Ensure EC2 is running (cost saver) ------------------------------
-      - name: Start EC2 instance
-        run: aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
-      - name: Wait for EC2 to be running
-        run: aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
+      # --- Ensure EC2 is running (idempotent) ---------------------------
+      - name: Ensure EC2 is running
+        shell: bash
+        env:
+          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          STATE=$(aws ec2 describe-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" \
+                  --query "Reservations[0].Instances[0].State.Name" --output text)
+          echo "Current state: $STATE"
+          case "$STATE" in
+            running)  echo "Already running."; ;;
+            stopped)  aws ec2 start-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" >/dev/null ;;
+            stopping) aws ec2 wait instance-stopped --instance-ids "$EC2_ID" --region "$AWS_REGION"
+                      aws ec2 start-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" >/dev/null ;;
+            pending)  : ;; # already starting
+            shutting-down|terminated) echo "Instance is $STATE; cannot start."; exit 1 ;;
+            *) echo "Unexpected state: $STATE"; exit 1 ;;
+          esac
+          aws ec2 wait instance-running --instance-ids "$EC2_ID" --region "$AWS_REGION"
 
-      # --- Get EC2 public IP (prefer TF output; fallback to describe) ------
+      # --- Get EC2 public IP (prefer TF output; fallback to describe) ---
       - name: Get EC2 public IP
         id: ec2ip
+        shell: bash
+        env:
+          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
         run: |
+          set -euo pipefail
           if [ -n "${{ env.ec2_public_ip }}" ] && [ "${{ env.ec2_public_ip }}" != "null" ]; then
-            echo "EC2_PUBLIC_IP=${{ env.ec2_public_ip }}" >> $GITHUB_ENV
+            ip="${{ env.ec2_public_ip }}"
           else
-            ip=$(aws ec2 describe-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION \
+            ip=$(aws ec2 describe-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" \
                  --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
-            echo "EC2_PUBLIC_IP=$ip" >> $GITHUB_ENV
           fi
-          echo "Public IP is ${EC2_PUBLIC_IP}"
+          echo "public_ip=$ip" >> "$GITHUB_OUTPUT"
+          echo "EC2_PUBLIC_IP=$ip" >> "$GITHUB_ENV"
+          echo "Public IP is $ip"
 
       # --- Sync data to S3 (fallback to secret if TF output not present) ---
       - name: Pick S3 bucket name
+        shell: bash
         run: |
-          if [ -z "${{ env.s3_bucket_name }}" ] || [ "${{ env.s3_bucket_name }}" = "null" ]; then
-            echo "s3_bucket_name=${{ secrets.S3_BUCKET_NAME }}" >> $GITHUB_ENV
+          val="${{ env.s3_bucket_name }}"
+          if [ -z "$val" ] || [ "$val" = "null" ]; then
+            val="${{ secrets.S3_BUCKET_NAME }}"
           fi
+          echo "s3_bucket_name=$val" >> "$GITHUB_ENV"
+
       - name: Sync data folder to S3
         run: aws s3 sync ./data "s3://${{ env.s3_bucket_name }}/data"
 
-      # --- Deploy on EC2: docker compose pull + up -------------------------
+      # --- Deploy on EC2: docker compose pull + up ----------------------
       # TIP: If you later enable SSM on the instance, switch from SSH to SSM RunCommand.
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ env.EC2_PUBLIC_IP }}
+          host: ${{ steps.ec2ip.outputs.public_ip }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            set -euxo pipefail
+            set -euo pipefail
             cd /home/ubuntu/app || (mkdir -p /home/ubuntu/app && cd /home/ubuntu/app)
-            aws s3 sync "s3://${{ env.s3_bucket_name }}/data" ./data || true
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} \
-            | docker login --username AWS --password-stdin "${{ env.aws_account_id || secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-            docker compose pull
-            # Import CSVs into Mongo (matches your existing loop)
-            for csv in ./data/*.csv; do
-              [ -f "$csv" ] || continue
-              collection=$(basename "$csv" .csv)
-              echo "[INFO] Importing $csv into '$collection'..."
-              docker exec citytaster-mongo mongoimport \
-                --db "${{ env.DB_NAME }}" \
-                --collection "$collection" \
-                --type csv --headerline --file "/data/$collection.csv" --drop || true
-            done
-            docker compose up -d
+
+            # Pull latest data from S3 to a local ./data folder
+            aws s3 sync "s3://${{ env.s3_bucket_name }}/data" ./data --region "${{ env.AWS_REGION }}" || true
+
+            # Login to ECR on the instance (for pulls)
+            aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
+              | docker login --username AWS --password-stdin \
+                "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+
+            # Pick docker compose command
+            if command -v docker-compose >/dev/null 2>&1; then
+              DC="docker-compose"
+            else
+              DC="docker compose"
+            fi
+
+            # Pull latest images and start DB first so imports work
+            $DC pull
+            $DC up -d mongo || true
+
+            # Import CSVs into Mongo (requires ./data mounted to /data in the compose for mongo)
+            if ls ./data/*.csv >/dev/null 2>&1; then
+              for csv in ./data/*.csv; do
+                collection=$(basename "$csv" .csv)
+                echo "[INFO] Importing $csv into '$collection'..."
+                $DC exec -T mongo mongoimport \
+                  --db "${{ env.DB_NAME }}" \
+                  --collection "$collection" \
+                  --type csv --headerline --file "/data/${collection}.csv" --drop || true
+              done
+            else
+              echo "[INFO] No CSV files to import."
+            fi
+
+            # Bring everything up
+            $DC up -d
+
+            # Clean up dangling images
             docker image prune -af || true
 
-      # --- Output the URL --------------------------------------------------
+      # --- Output the URL -----------------------------------------------
       - name: Output Preview URL
         run: |
           echo "------------------------------------------"
-          echo "Your app is live at: http://${EC2_PUBLIC_IP}"
+          echo "Your app is live at: http://${{ steps.ec2ip.outputs.public_ip }}"
           echo "------------------------------------------"
 
-      # --- Optional: stop the instance after deploy ------------------------
+      # --- Optional: stop the instance after deploy ---------------------
       - name: Stop EC2 instance (optional)
         if: always()
-        run: aws ec2 stop-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
+        env:
+          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: aws ec2 stop-instances --instance-ids "$EC2_ID" --region "$AWS_REGION"
+

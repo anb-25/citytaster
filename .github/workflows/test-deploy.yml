@@ -30,41 +30,42 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Start EC2 instance (if stopped)
-      - name: Start EC2 instance
-        run: |
-          aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
+      # Ensure EC2 is running (idempotent)
+      - name: Ensure EC2 is running
+        shell: bash
         env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      # Wait until EC2 instance is running
-      - name: Wait for EC2 to be running
+          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
         run: |
-          aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          set -euo pipefail
+          STATE=$(aws ec2 describe-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" \
+            --query "Reservations[0].Instances[0].State.Name" --output text)
+          echo "Current state: $STATE"
+          case "$STATE" in
+            running)  echo "Already running."; ;;
+            stopped)  aws ec2 start-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" >/dev/null ;;
+            stopping) aws ec2 wait instance-stopped --instance-ids "$EC2_ID" --region "$AWS_REGION"
+                      aws ec2 start-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" >/dev/null ;;
+            pending)  : ;; # already starting
+            shutting-down|terminated) echo "Instance is $STATE; cannot start."; exit 1 ;;
+            *) echo "Unexpected state: $STATE"; exit 1 ;;
+          esac
+          aws ec2 wait instance-running --instance-ids "$EC2_ID" --region "$AWS_REGION"
 
-      # Get EC2 public IP dynamically
+      # Get EC2 public IP dynamically (as a step output)
       - name: Get EC2 public IP
         id: ec2ip
-        run: |
-          ip=$(aws ec2 describe-instances \
-            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
-            --region $AWS_REGION \
-            --query "Reservations[0].Instances[0].PublicIpAddress" \
-            --output text)
-          echo "EC2_PUBLIC_IP=$ip" >> $GITHUB_ENV
-          echo "Public IP is $ip"
+        shell: bash
         env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          ip=$(aws ec2 describe-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" \
+               --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+          echo "public_ip=$ip" >> "$GITHUB_OUTPUT"
+          echo "EC2_PUBLIC_IP=$ip" >> "$GITHUB_ENV"
+          echo "Public IP is $ip"
 
-      # Login to ECR
+      # Login to ECR for docker pushes
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -76,7 +77,7 @@ jobs:
             --file deployment/Dockerfile.backend \
             -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-backend:latest" \
             .
-      
+
       # Build and push frontend Docker image
       - name: Build and push frontend Docker image
         run: |
@@ -89,52 +90,76 @@ jobs:
       # Sync data directory to S3
       - name: Sync data folder to S3
         run: |
-          aws s3 sync ./data s3://${{ secrets.S3_BUCKET_NAME }}/data
+          aws s3 sync ./data "s3://${{ secrets.S3_BUCKET_NAME }}/data"
 
-      # Deploy to EC2 using SSH and docker-compose
+      # Deploy to EC2 using SSH and docker compose
       - name: Deploy on EC2 via SSH
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ env.EC2_PUBLIC_IP }}
+          host: ${{ steps.ec2ip.outputs.public_ip }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd app || (mkdir app && cd app)
-            aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/data ./data
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
-            docker-compose pull
+            set -euo pipefail
 
-            # === LOOP TO IMPORT ANY CSV AS COLLECTION ===
-            for csv in ./data/*.csv; do
-              collection=$(basename "$csv" .csv)
-              echo "[INFO] Importing $csv into MongoDB collection '$collection'..."
-              docker exec citytaster-mongo mongoimport \
-                --db CityTasterDB \
-                --collection "$collection" \
-                --type csv --headerline --file "/data/$collection.csv" --drop
-            done
-            docker-compose up -d
-            docker image prune -af
+            # Ensure working dir
+            cd "$HOME"
+            mkdir -p app
+            cd app
 
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+            # Pull latest data from S3 to a local ./data folder
+            aws s3 sync "s3://${{ secrets.S3_BUCKET_NAME }}/data" ./data --region "${{ env.AWS_REGION }}"
 
-      # Output the preview URL for your app
+            # Login to ECR on the instance (for pulls)
+            aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
+              | docker login --username AWS --password-stdin \
+                "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+
+            # Pick docker compose command
+            if command -v docker-compose >/dev/null 2>&1; then
+              DC="docker-compose"
+            else
+              DC="docker compose"
+            fi
+
+            # Pull latest images
+            $DC pull
+
+            # Start database first so imports work
+            $DC up -d mongo || true
+
+            # Import CSVs -> collections (requires ./data mounted to /data in mongo service)
+            if ls ./data/*.csv >/dev/null 2>&1; then
+              for csv in ./data/*.csv; do
+                collection=$(basename "$csv" .csv)
+                echo "[INFO] Importing $csv -> $collection"
+                $DC exec -T mongo mongoimport \
+                  --db CityTasterDB \
+                  --collection "$collection" \
+                  --type csv --headerline --file "/data/${collection}.csv" --drop
+              done
+            else
+              echo "[INFO] No CSV files to import."
+            fi
+
+            # Bring everything up
+            $DC up -d
+
+            # Clean up dangling images
+            docker image prune -af || true
+
+      # Output the preview URL
       - name: Output Preview URL
         run: |
           echo "------------------------------------------"
           echo "Your app is live at:"
-          echo "http://${{ env.EC2_PUBLIC_IP }}"
+          echo "http://${{ steps.ec2ip.outputs.public_ip }}"
           echo "------------------------------------------"
 
       # (Optional) Stop EC2 instance after deploy to save costs
       - name: Stop EC2 instance
         if: always()
-        run: |
-          aws ec2 stop-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --region $AWS_REGION
         env:
-          AWS_REGION: ${{ env.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          aws ec2 stop-instances --instance-ids "$EC2_ID" --region "$AWS_REGION"
