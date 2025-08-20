@@ -3,7 +3,7 @@
 # PURPOSE: CI builds/pushes images to ECR, syncs S3 data, then updates EC2 via SSH.
 # RELATION TO APP: ships your frontend/backend images and restarts the compose stack on the host.
 # =====================================================================
-name: CityTaster Deploy
+name: CityTaster Deploy AWS
 
 on:
   push:
