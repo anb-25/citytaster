@@ -1,0 +1,39 @@
+# =====================================================================
+# FILE: infra/aws/modules/ec2_compose_host/templates/user-data.sh.tftpl
+# WHY: Recreates your user_data.sh behavior in a template (TF injects values).
+# =====================================================================
+#!/bin/bash
+set -euxo pipefail
+
+# WHY: Install minimal toolchain for compose + AWS ops
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y docker.io docker-compose-plugin awscli git
+usermod -aG docker ubuntu
+systemctl enable docker
+systemctl start docker
+
+# WHY: Private repo? install deploy key for the ubuntu user
+mkdir -p /home/ubuntu/.ssh
+echo "${GITHUB_DEPLOY_KEY}" >/home/ubuntu/.ssh/id_rsa
+chmod 600 /home/ubuntu/.ssh/id_rsa
+chown ubuntu:ubuntu /home/ubuntu/.ssh/id_rsa
+ssh-keyscan github.com >> /home/ubuntu/.ssh/known_hosts || true
+chown ubuntu:ubuntu /home/ubuntu/.ssh/known_hosts
+
+# WHY: Clone the app repo so compose file & code are present on the host
+sudo -u ubuntu git clone "${REPO_SSH_URL}" "${REPO_PATH}" || true
+
+# WHY: Sync seed data from S3 so app has what it needs on first boot
+aws s3 sync "s3://${S3_BUCKET_NAME}/data" "${REPO_PATH}/data" --region "${AWS_REGION}" || true
+
+# WHY: Login to ECR so docker pulls private images
+aws ecr get-login-password --region "${AWS_REGION}" \
+| docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com" || true
+
+# WHY: Start your compose stack
+cd "${REPO_PATH}"
+# optional: create .env if your app expects it
+[ -f .env ] || echo "DB_NAME=CityTasterDB" >> .env
+sudo -u ubuntu AWS_REGION="${AWS_REGION}" AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}" docker compose -f "${COMPOSE_FILE}" pull || true
+sudo -u ubuntu AWS_REGION="${AWS_REGION}" AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}" docker compose -f "${COMPOSE_FILE}" up -d
