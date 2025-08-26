@@ -3,224 +3,251 @@
 # PURPOSE: CI builds/pushes images to ECR, syncs S3 data, then updates EC2 via SSH.
 # RELATION TO APP: ships your frontend/backend images and restarts the compose stack on the host.
 # =====================================================================
-name: CityTaster Deploy AWS
+# File: .github/workflows/deploy.yml
+name: AWS Deploy via SSM (SSH fallback)
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  AWS_REGION: us-east-1          # keep aligned with infra/aws/envs/dev
-  DB_NAME: CityTasterDB          # used in your mongoimport loop
-  ENV_DIR: infra/aws/envs/dev    # where Terraform env lives (optional use below)
+  AWS_REGION: us-east-1
+  DB_NAME: CityTasterDB
+  # Required repo secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ACCOUNT_ID, S3_BUCKET, EC2_INSTANCE_ID
+  # Optional vars/env: EC2_PUBLIC_IP (only for SSH fallback or if resolving instance by IP)
 
 jobs:
-  deploy:
+  deploy_via_ssm:
+    name: Deploy on EC2 using SSM (default)
     runs-on: ubuntu-latest
-
     steps:
-      # --- Checkout ---------------------------------------------------
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # --- (Recommended) Use OIDC to assume an AWS role (no long-lived keys)
-      # To enable: create an IAM role with a trust policy for GitHub OIDC and grant ECR/S3/EC2.
-      # Then set: role-to-assume + aws-region below and REMOVE aws-access-key-id/secret.
-      # - name: Configure AWS credentials (OIDC)
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-      #     aws-region: ${{ env.AWS_REGION }}
-
-      # --- (Current) Access keys path (works today; rotate regularly) --
-      - name: Configure AWS credentials (access keys)
-        if: ${{ env.AWS_ROLE_TO_ASSUME == '' || env.AWS_ROLE_TO_ASSUME == null }}
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # --- Optional: read Terraform outputs if you configured a remote backend (S3/DynamoDB) ---
-      # PURPOSE: avoid hardcoding ECR/S3/EC2 info in Secrets.
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Read Terraform outputs (if backend configured)
-        id: tf
+      - name: Resolve instance id (prefer secret, else by public IP)
+        id: ec2
         shell: bash
         run: |
           set -euo pipefail
-          # If you later add a remote backend, uncomment backend-configs and add secrets:
-          # terraform -chdir="$ENV_DIR" init \
-          #   -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-          #   -backend-config="key=${{ secrets.TF_STATE_KEY }}" \
-          #   -backend-config="region=${{ env.AWS_REGION }}" \
-          #   -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
-          terraform -chdir="$ENV_DIR" init -input=false >/dev/null 2>&1 || true
-          terraform -chdir="$ENV_DIR" output -json >/tmp/outs.json || echo '{}' >/tmp/outs.json
-          # Export each output as an env var (key=value)
-          jq -r 'to_entries[] | "\(.key)=\(.value.value)"' /tmp/outs.json | tee -a "$GITHUB_ENV" || true
-          # Exposes (if defined in TF): ecr_backend_url, ecr_frontend_url, s3_bucket_name, aws_account_id, ec2_public_ip
-
-      # --- Normalize/fallback common env from TF -> Secrets --------------
-      - name: Set AWS account id (fallback)
-        shell: bash
-        run: |
-          val="${{ env.aws_account_id }}"
-          if [ -z "$val" ] || [ "$val" = "null" ]; then
-            val="${{ secrets.AWS_ACCOUNT_ID }}"
+          iid="${{ secrets.EC2_INSTANCE_ID }}"
+          if [[ -z "$iid" || "$iid" == "null" ]]; then
+            ip="${{ vars.EC2_PUBLIC_IP || env.EC2_PUBLIC_IP }}"
+            if [[ -z "$ip" || "$ip" == "null" ]]; then
+              echo "Provide EC2_INSTANCE_ID (secret) or EC2_PUBLIC_IP (env/vars)." >&2
+              exit 1
+            fi
+            iid=$(aws ec2 describe-instances \
+              --filters "Name=ip-address,Values=$ip" \
+              --query 'Reservations[].Instances[].InstanceId' \
+              --output text)
+            if [[ -z "$iid" || "$iid" == "None" ]]; then
+              echo "Could not resolve instance id for $ip" >&2
+              exit 1
+            fi
           fi
-          echo "AWS_ACCOUNT_ID=$val" >> "$GITHUB_ENV"
+          echo "instance_id=$iid" >> "$GITHUB_OUTPUT"
+          echo "INSTANCE_ID=$iid" >> "$GITHUB_ENV"
 
-      # --- Ensure repos exist, login to ECR ------------------------------
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # Derive ECR repo URLs if TF outputs aren't available yet
-      - name: Derive ECR URLs (fallback)
-        if: ${{ env.ecr_backend_url == '' || env.ecr_backend_url == null || env.ecr_frontend_url == '' || env.ecr_frontend_url == null }}
-        run: |
-          echo "ecr_backend_url=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-backend" >> $GITHUB_ENV
-          echo "ecr_frontend_url=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-frontend" >> $GITHUB_ENV
-
-      # --- Buildx for multi-arch ----------------------------------------
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # --- Build & push backend -----------------------------------------
-      - name: Build and push backend Docker image
-        run: |
-          docker buildx build \
-            --push \
-            -f deployment/Dockerfile.backend \
-            -t "${{ env.ecr_backend_url }}:latest" \
-            .
-
-      # --- Build & push frontend ----------------------------------------
-      - name: Build and push frontend Docker image
-        run: |
-          docker buildx build \
-            --push \
-            -f deployment/Dockerfile.frontend \
-            -t "${{ env.ecr_frontend_url }}:latest" \
-            .
-
-      # --- Ensure EC2 is running (idempotent) ---------------------------
-      - name: Ensure EC2 is running
+      - name: SSM preflight + deploy
+        id: ssm
         shell: bash
         env:
-          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          INSTANCE_ID: ${{ steps.ec2.outputs.instance_id }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          DB_NAME: ${{ env.DB_NAME }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          STATE=$(aws ec2 describe-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" \
-                  --query "Reservations[0].Instances[0].State.Name" --output text)
-          echo "Current state: $STATE"
-          case "$STATE" in
-            running)  echo "Already running."; ;;
-            stopped)  aws ec2 start-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" >/dev/null ;;
-            stopping) aws ec2 wait instance-stopped --instance-ids "$EC2_ID" --region "$AWS_REGION"
-                      aws ec2 start-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" >/dev/null ;;
-            pending)  : ;; # already starting
-            shutting-down|terminated) echo "Instance is $STATE; cannot start."; exit 1 ;;
-            *) echo "Unexpected state: $STATE"; exit 1 ;;
-          esac
-          aws ec2 wait instance-running --instance-ids "$EC2_ID" --region "$AWS_REGION"
 
-      # --- Get EC2 public IP (prefer TF output; fallback to describe) ---
-      - name: Get EC2 public IP
-        id: ec2ip
-        shell: bash
-        env:
-          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
-        run: |
+          # Build the commands list for SSM (each element is a line)
+          mapfile -t CMDS <<'EOF'
           set -euo pipefail
-          if [ -n "${{ env.ec2_public_ip }}" ] && [ "${{ env.ec2_public_ip }}" != "null" ]; then
-            ip="${{ env.ec2_public_ip }}"
+
+          # Ensure base tools (why: some AMIs are minimal)
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "[PRE] Installing AWS CLI v2";
+            sudo apt-get update -y;
+            sudo apt-get install -y unzip curl || true;
+            tmp=$(mktemp -d); pushd "$tmp" >/dev/null;
+            curl -fsSLo awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip;
+            unzip -q awscliv2.zip;
+            sudo ./aws/install || sudo ./aws/install --update; popd >/dev/null;
+          fi
+
+          # Ensure Docker + Compose (why: we rely on 'docker compose')
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "[PRE] Installing Docker Engine + Compose plugin";
+            sudo apt-get update -y;
+            sudo apt-get install -y ca-certificates curl gnupg lsb-release;
+            sudo install -m 0755 -d /etc/apt/keyrings;
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg;
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null;
+            sudo apt-get update -y;
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin;
+          fi
+
+          # Ensure SSH service running (why: your SSH fallback needs it)
+          if systemctl list-unit-files | grep -q '^ssh\.'; then SVC=ssh; else SVC=sshd; fi
+          sudo systemctl enable --now "$SVC" || true
+          sudo ss -tlnp | grep -E ':22\s' || echo "[WARN] Port 22 not listening; SSH fallback may fail."
+
+          # Workspace
+          cd /home/ubuntu
+          mkdir -p app
+          cd app
+
+          # Sanity check for docker-compose.yml
+          if [[ ! -f docker-compose.yml ]]; then
+            echo "[ERROR] docker-compose.yml missing at /home/ubuntu/app" >&2
+            exit 2
+          fi
+
+          # Pull latest data from S3 → ./data
+          aws s3 sync "s3://${S3_BUCKET}/data" ./data --region "${AWS_REGION}"
+
+          # ECR login for pulls
+          aws ecr get-login-password --region "${AWS_REGION}" \
+            | sudo docker login --username AWS --password-stdin \
+              "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+          # Pick docker compose command
+          if command -v docker-compose >/dev/null 2>&1; then
+            DC=docker-compose
           else
-            ip=$(aws ec2 describe-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" \
-                 --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+            DC='sudo docker compose'
           fi
-          echo "public_ip=$ip" >> "$GITHUB_OUTPUT"
-          echo "EC2_PUBLIC_IP=$ip" >> "$GITHUB_ENV"
-          echo "Public IP is $ip"
 
-      # --- Sync data to S3 (fallback to secret if TF output not present) ---
-      - name: Pick S3 bucket name
+          # Pull images & boot Mongo first
+          $DC pull
+          $DC up -d mongo || true
+
+          # Wait for Mongo to be healthy (uses compose healthcheck)
+          for i in $(seq 1 60); do
+            st=$(sudo docker inspect -f '{{.State.Health.Status}}' citytaster-mongo 2>/dev/null || echo starting)
+            if [[ "$st" == "healthy" ]]; then echo "Mongo is healthy"; break; fi
+            sleep 2
+          done
+
+          # Import CSVs if any (requires ./data bound to /data:ro in compose)
+          shopt -s nullglob; files=(./data/*.csv); shopt -u nullglob
+          if (( ${#files[@]} > 0 )); then
+            for csv in "${files[@]}"; do
+              collection=$(basename "$csv" .csv)
+              echo "[INFO] Importing $csv → $collection"
+              $DC exec -T mongo mongoimport \
+                --db "${DB_NAME}" \
+                --collection "$collection" \
+                --type csv --headerline --file "/data/${collection}.csv" --drop
+            done
+          else
+            echo "[INFO] No CSV files to import."
+          fi
+
+          # Bring everything up
+          $DC up -d
+
+          # Housekeeping
+          sudo docker image prune -af || true
+          EOF
+
+          # Flatten into --parameters form
+          json_arr=$(printf '%s\n' "${CMDS[@]}" | jq -R . | jq -s .)
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "CityTaster deploy via SSM" \
+            --parameters commands="${json_arr}" \
+            --output text \
+            --query 'Command.CommandId')
+
+          echo "command_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+
+          # Wait for completion & show status
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query 'Status,StandardErrorContent' --output text || true
+
+  # --- SSH fallback (disabled by default). Includes preflight and temporary SG opening. ---
+  deploy_via_ssh:
+    if: false
+    name: Deploy via SSH (with preflight + temp SG)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Open SG (port 22) to this runner
+        id: sg
         shell: bash
+        env:
+          EC2_PUBLIC_IP: ${{ vars.EC2_PUBLIC_IP || env.EC2_PUBLIC_IP }}
         run: |
-          val="${{ env.s3_bucket_name }}"
-          if [ -z "$val" ] || [ "$val" = "null" ]; then
-            val="${{ secrets.S3_BUCKET_NAME }}"
-          fi
-          echo "s3_bucket_name=$val" >> "$GITHUB_ENV"
+          set -euo pipefail
+          RUNNER_IP=$(curl -fsS https://api.ipify.org)
+          IJ=$(aws ec2 describe-instances --filters "Name=ip-address,Values=${EC2_PUBLIC_IP}" --query 'Reservations[].Instances[]' --output json)
+          IID=$(jq -r '.[0].InstanceId' <<<"$IJ")
+          SG_IDS=$(jq -r '.[0].SecurityGroups[].GroupId' <<<"$IJ")
+          for SG in $SG_IDS; do
+            aws ec2 authorize-security-group-ingress --group-id "$SG" \
+              --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${RUNNER_IP}/32,Description=gh-run-${GITHUB_RUN_ID}}]" \
+              || true
+          done
+          echo "SG_IDS=$SG_IDS" >> "$GITHUB_ENV"
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
 
-      - name: Sync data folder to S3
-        run: aws s3 sync ./data "s3://${{ env.s3_bucket_name }}/data"
+      - name: Preflight over SSM (ensure docker compose + sshd)
+        env:
+          INSTANCE_ID: ${{ steps.ec2.outputs.instance_id }}
+        run: |
+          set -euo pipefail
+          CMDS='["set -e","if systemctl list-unit-files | grep -q '^ssh\\.'; then SVC=ssh; else SVC=sshd; fi","sudo systemctl enable --now $SVC || true","command -v docker >/dev/null || echo 'Docker missing'","docker compose version >/dev/null 2>&1 || echo 'Compose plugin missing'"]'
+          CID=$(aws ssm send-command --instance-ids "$INSTANCE_ID" --document-name AWS-RunShellScript --parameters commands="$CMDS" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$CID" --instance-id "$INSTANCE_ID"
 
-      # --- Deploy on EC2: docker compose pull + up ----------------------
-      # TIP: If you later enable SSM on the instance, switch from SSH to SSM RunCommand.
-      - name: Deploy on EC2 via SSH
+      - name: SSH deploy
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ steps.ec2ip.outputs.public_ip }}
+          host: ${{ vars.EC2_PUBLIC_IP || env.EC2_PUBLIC_IP }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 1m
+          command_timeout: 20m
           script: |
             set -euo pipefail
-            cd /home/ubuntu/app || (mkdir -p /home/ubuntu/app && cd /home/ubuntu/app)
-
-            # Pull latest data from S3 to a local ./data folder
-            aws s3 sync "s3://${{ env.s3_bucket_name }}/data" ./data --region "${{ env.AWS_REGION }}" || true
-
-            # Login to ECR on the instance (for pulls)
-            aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
-              | docker login --username AWS --password-stdin \
-                "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-
-            # Pick docker compose command
-            if command -v docker-compose >/dev/null 2>&1; then
-              DC="docker-compose"
-            else
-              DC="docker compose"
-            fi
-
-            # Pull latest images and start DB first so imports work
+            cd "$HOME/app"
+            aws s3 sync "s3://${{ secrets.S3_BUCKET }}/data" ./data --region "${{ env.AWS_REGION }}"
+            aws ecr get-login-password --region "${{ env.AWS_REGION }}" | docker login --username AWS --password-stdin "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+            if command -v docker-compose >/dev/null 2>&1; then DC=docker-compose; else DC="docker compose"; fi
             $DC pull
             $DC up -d mongo || true
-
-            # Import CSVs into Mongo (requires ./data mounted to /data in the compose for mongo)
-            if ls ./data/*.csv >/dev/null 2>&1; then
-              for csv in ./data/*.csv; do
-                collection=$(basename "$csv" .csv)
-                echo "[INFO] Importing $csv into '$collection'..."
-                $DC exec -T mongo mongoimport \
-                  --db "${{ env.DB_NAME }}" \
-                  --collection "$collection" \
-                  --type csv --headerline --file "/data/${collection}.csv" --drop || true
-              done
-            else
-              echo "[INFO] No CSV files to import."
-            fi
-
-            # Bring everything up
+            for i in $(seq 1 60); do st=$(docker inspect -f '{{.State.Health.Status}}' citytaster-mongo 2>/dev/null || echo starting); [[ "$st" == healthy ]] && break; sleep 2; done
+            if ls ./data/*.csv >/dev/null 2>&1; then for csv in ./data/*.csv; do collection=$(basename "$csv" .csv); $DC exec -T mongo mongoimport --db "${{ env.DB_NAME }}" --collection "$collection" --type csv --headerline --file "/data/${collection}.csv" --drop; done; else echo "[INFO] No CSV files to import."; fi
             $DC up -d
-
-            # Clean up dangling images
             docker image prune -af || true
 
-      # --- Output the URL -----------------------------------------------
-      - name: Output Preview URL
-        run: |
-          echo "------------------------------------------"
-          echo "Your app is live at: http://${{ steps.ec2ip.outputs.public_ip }}"
-          echo "------------------------------------------"
-
-      # --- Optional: stop the instance after deploy ---------------------
-      - name: Stop EC2 instance (optional)
+      - name: Revoke SG rule
         if: always()
-        env:
-          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
-        run: aws ec2 stop-instances --instance-ids "$EC2_ID" --region "$AWS_REGION"
+        run: |
+          set -euo pipefail
+          for SG in $SG_IDS; do
+            aws ec2 revoke-security-group-ingress --group-id "$SG" \
+              --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${RUNNER_IP}/32}]" || true
+          done
+# =====================================================================
 
