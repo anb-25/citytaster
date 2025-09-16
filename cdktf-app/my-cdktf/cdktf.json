@@ -1,0 +1,14 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node main.ts",
+  "projectId": "d5004282-184d-4480-a87a-4eb291bae8c2",
+  "sendCrashReports": "false",
+  "terraformProviders": [],
+  "terraformModules": [
+    {
+      "name": "citytaster_infra",         
+      "source": "../../infra"        
+    }
+  ],
+  "context": {}
+}

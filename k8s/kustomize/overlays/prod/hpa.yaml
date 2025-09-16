@@ -1,0 +1,21 @@
+# Horizontal Pod Autoscaler: scales backend pods based on CPU utilization.
+# Requires Metrics Server installed in the cluster.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+  namespace: citytaster
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 3           # floor: always keep at least this many
+  maxReplicas: 6           # ceiling: don't exceed this many
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70  # target average CPU usage across pods

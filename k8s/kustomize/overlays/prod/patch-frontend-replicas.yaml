@@ -1,0 +1,5 @@
+# WHAT: Increase frontend pod count in prod.
+# WHY: Serve static assets redundantly across nodes; improves availability.
+- op: replace
+  path: /spec/replicas
+  value: 3

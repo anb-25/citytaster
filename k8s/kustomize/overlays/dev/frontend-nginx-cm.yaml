@@ -1,0 +1,47 @@
+# -----------------------------------------------------------------------------
+# This file defines a Kubernetes ConfigMap resource for the frontend NGINX
+# configuration in the 'dev' overlay environment using Kustomize.
+#
+# Purpose:
+#   - To provide environment-specific configuration for the frontend NGINX
+#     deployment in the development environment.
+#   - Used by Kustomize overlays to customize the base configuration for 'dev'.
+#
+# Usage:
+#   - Applied as part of the Kustomize overlay for the 'dev' environment.
+#   - Typically referenced by frontend NGINX Deployment or Pod resources.
+#
+# Note:
+#   - Ensure that any sensitive data is not included in this ConfigMap.
+#   - Update this file to reflect changes in frontend NGINX configuration
+#     specific to the development environment.
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx-conf
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name _;
+
+      root /usr/share/nginx/html;
+      index index.html;
+
+      # SPA fallback
+      location / {
+        try_files $uri /index.html;
+      }
+
+      # Keep the /api prefix (NO trailing slash on proxy_pass)
+      location /api/ {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_pass http://backend-dev:5000;   # ← keep /api in the URI
+      }
+    }

@@ -1,0 +1,52 @@
+# Dev overlay (kind/local):
+# - Uses :dev images you `kind load`.
+# - Keeps replicas low.
+# - Adds a DEV MongoDB (ephemeral) on port 27017.
+# - Patches the base ConfigMap to set MONGO_URL pointing at the mongo Service.
+# - Adds a ConfigMap for frontend NGINX config (proxy to backend-dev).
+# - Patches the frontend Deployment to mount the NGINX config.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: citytaster-dev
+nameSuffix: -dev
+
+# This kustomization.yaml file is used for configuring Kubernetes resources in the 'dev' overlay environment.
+# The 'resources' field specifies a list of resource files or directories to be included in this overlay.
+# These resources can be base manifests or other overlays that will be customized for the development environment.
+# Add the relative paths to the resource files or directories under the 'resources' key.
+resources:
+  - ../../base                 # shared Deployments/Services/ConfigMap
+  - namespace.yaml             # dev namespace
+  - ingress.yaml               # (optional) ingress for dev
+  - secret-dev.yaml            # example secret (optional)
+  - mongo-deploy.yaml          # << adds MongoDB for dev only (ephemeral)
+  - mongo-svc.yaml             # << exposes MongoDB at mongo:27017 inside cluster
+  - frontend-nginx-cm.yaml     # << dev-specific frontend NGINX ConfigMap
+
+# Use the tags you build & load into kind
+images:
+  - name: citytaster-backend
+    newName: citytaster-backend
+    newTag: dev
+  - name: citytaster-frontend
+    newName: citytaster-frontend
+    newTag: dev
+
+# Patches to modify resources for the dev environment.
+patchesStrategicMerge:
+  - patch-configmap-dev.yaml  # << sets MONGO_URL in the base ConfigMap
+  - patch-backend-use-configmap.yaml # << makes backend use the ConfigMap for env vars
+  - patch-frontend-mount-nginx.yaml # << mounts the NGINX config in the frontend Pod
+  - patch-backend-mongo-env.yaml  # << sets MONGO_URL to point at mongo-dev service
+
+# Patches to modify the number of replicas for backend and frontend Deployments.
+# Keeps replicas low for local dev to save resources.
+patches:
+  - target: { group: apps, version: v1, kind: Deployment, name: backend }
+    path: patch-backend-replicas.yaml
+  - target: { group: apps, version: v1, kind: Deployment, name: frontend }
+    path: patch-frontend-replicas.yaml
+
+

@@ -1,0 +1,5 @@
+# WHAT: Replace the number of replicas for the frontend Deployment.
+# WHY: same rationale as backend; keep it small for local dev.
+- op: replace
+  path: /spec/replicas
+  value: 1

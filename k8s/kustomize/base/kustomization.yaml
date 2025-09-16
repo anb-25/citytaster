@@ -1,0 +1,16 @@
+# Base Kustomization shared by both dev and prod overlays.
+# Overlays import this file and then override environment-specific bits (images, replicas, hosts).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Core, environment-agnostic building blocks:
+  - configmap.yaml         # non-secret configuration shared by pods
+  - backend-deploy.yaml    # API Deployment (pods + rollout strategy), base backend Deployment (overridden by overlays)
+  - backend-svc.yaml       # API Service (stable cluster IP/DNS), stable in-cluster address for backend
+  - frontend-deploy.yaml   # SPA Deployment (Nginx serving built assets), base frontend Deployment (overridden by overlays)
+  - frontend-svc.yaml      # SPA Service, stable in-cluster address for frontend
+
+commonLabels:
+  # Uniform labels help with selection, monitoring, PDBs, and cleanups.
+  app.kubernetes.io/name: citytaster

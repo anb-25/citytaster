@@ -1,0 +1,16 @@
+# This patch file is used with Kustomize to override environment variables for the backend Deployment in the 'dev' overlay.
+# It sets the MongoDB connection URLs to point to the 'mongo-dev' service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  template:
+    spec:
+      containers:
+        - name: backend
+          env:
+            - name: MONGO_URL
+              value: "mongodb://mongo-dev:27017/citytaster"
+            - name: MONGO_URI
+              value: "mongodb://mongo-dev:27017/citytaster"

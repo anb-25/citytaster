@@ -1,0 +1,14 @@
+# ClusterIP Service for frontend.
+# Typically port-forwarded in dev; publicly exposed via Ingress in prod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: frontend
+  ports:
+    - name: http
+      port: 80        # service port
+      targetPort: 80  # container port (Nginx)

@@ -1,0 +1,41 @@
+# Dev-only MongoDB for kind. Data is ephemeral (emptyDir).
+# WHY: gives the backend a real DB in the cluster without managing persistence for dev.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo                          # must match pod template labels
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:6
+          args: ["--bind_ip_all"]         # listen on all pod interfaces
+          ports:
+            - name: mongo
+              containerPort: 27017        # Mongo listens here
+          # Simple TCP probes so you don't need custom scripts
+          readinessProbe:
+            tcpSocket: { port: 27017 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: 27017 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m,  memory: 256Mi }
+            limits:   { cpu: 500m, memory: 1Gi }
+          volumeMounts:
+            - name: data
+              mountPath: /data/db         # default Mongo data dir
+      volumes:
+        - name: data
+          emptyDir: {}                    # ephemeral — restarts wipe data (fine for dev)

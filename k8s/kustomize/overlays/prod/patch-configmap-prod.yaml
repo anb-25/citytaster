@@ -1,0 +1,11 @@
+# WHAT: prod config. Set MONGO_URL to your managed/external MongoDB (Atlas, etc.).
+# WHY: DB should be persistent and highly available in prod; keep credentials out of images.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: citytaster-config
+data:
+  LOG_LEVEL: "info"
+  # Example (adjust to your provider/credentials/DB name):
+  # For Secrets: move this to a Secret and patch the Deployment to envFrom.secretRef.
+  MONGO_URL: "mongodb://username:password@mongo-host:27017/citytaster?authSource=admin&replicaSet=rs0"

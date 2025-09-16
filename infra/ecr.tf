@@ -1,13 +1,18 @@
 # infra/ecr.tf
 # PURPOSE: Creates AWS ECR repositories for backend and frontend Docker images.
 
-
-# ECR repository for backend service
-resource "aws_ecr_repository" "backend" {
-  name = "citytaster-backend"
+resource "aws_ecr_repository" "citytaster_frontend" {
+  name                 = "citytaster-frontend"
+  force_delete         = true
+  image_scanning_configuration {
+    scan_on_push = true
+  }
 }
 
-# ECR repository for frontend service
-resource "aws_ecr_repository" "frontend" {
-  name = "citytaster-frontend"
+resource "aws_ecr_repository" "citytaster_backend" {
+  name                 = "citytaster-backend"
+  force_delete         = true
+  image_scanning_configuration {
+    scan_on_push = true
+  }
 }

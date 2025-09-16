@@ -1,0 +1,55 @@
+# WHAT: Deployment for the Flask API (backend).
+# WHY: Ensures the desired number of backend pods run, supports rolling updates/rollbacks.
+# NOTE:
+#   - Namespace is added by overlays (dev/prod), not here.
+#   - images/tags are overridden per-env via overlays.kustomization.yaml `images:`.
+#   - replicas are patched per-env via JSON6902 (so keep a reasonable default here).
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1                      # base default; dev/prod overlays replace this value
+  strategy:
+    type: RollingUpdate            # zero-downtime updates by gradually swapping pods
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: backend   # MUST match pod template labels (below)
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: backend
+        # app.kubernetes.io/name is injected by base/kustomization.yaml commonLabels
+    spec:
+      # imagePullSecrets:                 # WHY: needed only for private registries
+      #   - name: regcred                 # created via: kubectl create secret docker-registry ...
+      containers:
+        - name: backend
+          image: citytaster-backend:latest # overlays switch to :dev (kind) or GHCR :latest
+          imagePullPolicy: IfNotPresent    # WHY: faster local loops; pull only if missing
+          ports:
+            - name: http
+              containerPort: 5000          # WHY: matches your Dockerfile/backend port
+          # WHY: keep configuration out of images; can change without rebuilds
+          envFrom:
+            - configMapRef:
+                name: citytaster-config    # non-secret vars (LOG_LEVEL, etc.)
+            # - secretRef:                 # enable if you create citytaster-secrets in the namespace
+            #     name: citytaster-secrets # secrets (DB URL, tokens). Overlays include sample Secret.
+          # WHY (readiness): only receive traffic when the app is ready (avoids 502s during warmup)
+          readinessProbe:
+            tcpSocket: { port: 5000 }      # TCP keeps it simple; no /healthz required
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          # WHY (liveness): auto-restart the container if it becomes unhealthy (self-healing)
+          livenessProbe:
+            tcpSocket: { port: 5000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # WHY: scheduler needs hints; prevents noisy-neighbor issues
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }  # guaranteed minimum
+            limits:   { cpu: 500m, memory: 512Mi }  # hard caps; tune from metrics
+      # nodeselector/tolerations/affinity can be added later for placement control
+

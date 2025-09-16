@@ -1,7 +1,6 @@
 # infra/ec2.tf
 # PURPOSE: Provisions the EC2 instance for deployment, configures AMI, networking, and user data for initialization.
 
-
 # Ubuntu 22.04 LTS AMI for us-east-1 (check for latest AMI if needed)
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -28,11 +27,11 @@ resource "aws_instance" "main" {
     Name = "citytaster-ec2"
   }
 
-  # Dynamically inject variables from Terraform into user_data.sh!
+  # IMPORTANT: coalesce to empty string to avoid nulls in templatefile
   user_data = templatefile("${path.module}/user_data.sh", {
-    GITHUB_DEPLOY_KEY = var.github_deploy_key,
-    S3_BUCKET_NAME    = aws_s3_bucket.csv_data.bucket,
-    AWS_REGION        = var.aws_region,
+    GITHUB_DEPLOY_KEY = var.github_deploy_key # now guaranteed non-null
+    S3_BUCKET_NAME    = aws_s3_bucket.csv_data.bucket
+    AWS_REGION        = var.aws_region
     AWS_ACCOUNT_ID    = data.aws_caller_identity.current.account_id
   })
 }

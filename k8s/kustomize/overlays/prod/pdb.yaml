@@ -1,0 +1,12 @@
+# PodDisruptionBudget: limits voluntary disruptions (e.g., node drains/updates)
+# to keep at least one backend pod available at all times.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: citytaster
+spec:
+  minAvailable: 1  # ensure one pod stays up during voluntary disruptions
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: backend

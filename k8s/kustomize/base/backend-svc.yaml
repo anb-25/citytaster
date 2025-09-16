@@ -1,0 +1,14 @@
+# ClusterIP Service for backend.
+# Provides stable DNS (http://backend:5000) for other pods (e.g., frontend or jobs).
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: backend  # targets backend pods from Deployment
+  ports:
+    - name: http
+      port: 5000       # service port (what clients call)
+      targetPort: 5000 # container port (what pods actually listen on)

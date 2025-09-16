@@ -1,0 +1,5 @@
+# Dedicated prod namespace (often paired with cluster policies/RBAC).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: citytaster

@@ -1,0 +1,10 @@
+# WHAT: add dev-specific config.
+# WHY: make backend connect to the in-cluster MongoDB Service on the default port (27017).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: citytaster-config
+data:
+  LOG_LEVEL: "debug"
+  # Your Flask app should read this env var; adjust the name if your code expects a different one.
+  MONGO_URL: "mongodb://mongo-dev:27017/citytaster"

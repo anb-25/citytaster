@@ -1,0 +1,6 @@
+# WHAT: Replace the number of replicas for the backend Deployment.
+# WHY: laptops don’t need many pods; fewer replicas = less CPU/RAM usage.
+# NOTE: JSON6902 operates on the final object path after other generators merge.
+- op: replace
+  path: /spec/replicas
+  value: 1

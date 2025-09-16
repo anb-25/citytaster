@@ -1,0 +1,49 @@
+# WHAT: Deployment for the frontend (Nginx serving built React/Vite assets).
+# WHY: Keeps a stable set of stateless web pods and enables rolling updates/rollbacks.
+# NOTE:
+#   - Namespace, image tag, and replicas are environment-specific (overlays handle that).
+#   - Frontend talks to backend via the in-cluster DNS name: http://backend:5000.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1                         # base default; overridden in overlays
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: citytaster-frontend:latest   # overlays set :dev (kind) or GHCR :latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80               # WHY: matches Nginx listen port from your image
+          # WHY: ensure we only route traffic after Nginx can serve content
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          # WHY: restart the pod if Nginx stops responding
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # Optional: expose config to the SPA (only if you read from env at container start)
+          envFrom:
+            - configMapRef:
+                name: citytaster-config
+            # - secretRef:
+            #     name: citytaster-secrets
+          resources:
+            requests: { cpu: 50m,  memory: 64Mi  }
+            limits:   { cpu: 300m, memory: 256Mi }
+

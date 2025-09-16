@@ -1,0 +1,6 @@
+# WHAT: Increase backend pod count in prod.
+# WHY: API is state-free and benefits from horizontal scaling for resilience and load.
+# TIP: HPA can scale above this; this value is your "steady-state" floor.
+- op: replace
+  path: /spec/replicas
+  value: 3

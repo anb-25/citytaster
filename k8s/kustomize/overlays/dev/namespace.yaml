@@ -1,0 +1,5 @@
+# Dedicated namespace for dev to isolate resources and avoid naming conflicts.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: citytaster-dev

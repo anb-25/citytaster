@@ -1,0 +1,8 @@
+# Plain (non-secret) application configuration.
+# Use for flags, log levels, feature toggles. Not for credentials.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: citytaster-config
+data:
+  LOG_LEVEL: "info"   # pods can import via envFrom -> configMapRef

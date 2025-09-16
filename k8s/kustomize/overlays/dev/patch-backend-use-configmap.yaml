@@ -1,0 +1,29 @@
+# -----------------------------------------------------------------------------
+# This patch YAML file is intended for use with Kustomize overlays in the 'dev'
+# environment. It is used to modify the backend deployment to utilize a specific
+# ConfigMap for configuration purposes.
+#
+#
+# Usage:
+#   - Applied as a patch in the Kustomize overlay for the development environment.
+#   - Typically modifies the 'envFrom' or 'volumeMounts' sections of the backend
+#     deployment to reference a ConfigMap containing environment-specific settings.
+#
+# Note:
+#   - Ensure the referenced ConfigMap exists in the same namespace.
+#   - This patch helps separate configuration from code, supporting 12-factor app
+#     principles and enabling easier environment-specific customization.
+# -----------------------------------------------------------------------------
+# yaml-language-server: $schema=none
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  template:
+    spec:
+      containers:
+        - name: backend
+          envFrom:
+            - configMapRef:
+                name: citytaster-config   # kustomize will suffix -> citytaster-config-dev

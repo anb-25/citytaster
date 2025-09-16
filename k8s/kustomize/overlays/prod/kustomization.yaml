@@ -1,0 +1,40 @@
+# Prod overlay (cluster):
+# - Uses registry images.
+# - Scales replicas up.
+# - Adds HPA/PDB.
+# - Patches base ConfigMap with a production MONGO_URL (external or managed Mongo).
+# - Frontend is Nginx on port 80 (Ingress points to it).
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: citytaster
+nameSuffix: -prod
+
+resources:
+  - ../../base
+  - namespace.yaml
+  - ingress.yaml
+  - secret-prod.yaml      # optional; keep if you later move MONGO_URL to a Secret
+  - hpa.yaml
+  - pdb.yaml
+
+# Point to your registry images/tags
+images:
+  - name: citytaster-backend
+    newName: ghcr.io/your-org/citytaster-backend   # change to your registry
+    newTag: latest                                  # prefer a real version tag
+  - name: citytaster-frontend
+    newName: ghcr.io/your-org/citytaster-frontend  # change to your registry
+    newTag: latest
+
+patches:
+  # JSON6902: steady-state replicas for prod
+  - target: { group: apps, version: v1, kind: Deployment, name: backend }
+    path: patch-backend-replicas.yaml
+  - target: { group: apps, version: v1, kind: Deployment, name: frontend }
+    path: patch-frontend-replicas.yaml
+
+patchesStrategicMerge:
+  # Override the base ConfigMap with a production Mongo URL (external DB recommended)
+  - patch-configmap-prod.yaml
