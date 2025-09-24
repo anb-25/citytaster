@@ -77,3 +77,169 @@ jobs:
           fi
           echo "env_name=$ENV" >> "$GITHUB_OUTPUT"
           echo "STACK_NAME=${{ env.PROJECT }}-$ENV" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push backend image
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_images }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV="${{ steps.env.outputs.env_name }}"
+          URI="${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-${ENV}-backend"
+          echo "Building $URI:latest from deployment/Dockerfile.backend"
+          docker build -t "$URI:latest" -f deployment/Dockerfile.backend .
+          docker push "$URI:latest"
+
+      - name: Build & push frontend image
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_images }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV="${{ steps.env.outputs.env_name }}"
+          URI="${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-${ENV}-frontend"
+          echo "Building $URI:latest from deployment/Dockerfile.frontend"
+          docker build -t "$URI:latest" -f deployment/Dockerfile.frontend .
+          docker push "$URI:latest"
+
+      - name: Install CDKTF dependencies
+        working-directory: ${{ env.APP_ROOT }}
+        run: |
+          npm ci
+          npx --yes cdktf-cli@latest provider add "aws@~> 5.0"
+
+      - name: Validate ${{ steps.env.outputs.env_name }} config
+        working-directory: ${{ env.APP_ROOT }}
+        env:
+          CTX_ENV: ${{ steps.env.outputs.env_name }}
+        run: node scripts/validate-dev.cjs
+
+      - name: Synthesize CDKTF
+        working-directory: ${{ env.APP_ROOT }}
+        run: npx --yes cdktf-cli@latest synth --context env=${{ steps.env.outputs.env_name }}
+
+      - name: Upload cdktf.out (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdktf.out-${{ steps.env.outputs.env_name }}
+          path: ${{ env.APP_ROOT }}/cdktf.out
+
+      - name: Deploy ${{ steps.env.outputs.STACK_NAME }}
+        working-directory: ${{ env.APP_ROOT }}
+        run: npx --yes cdktf-cli@latest deploy ${{ steps.env.outputs.STACK_NAME }} --context env=${{ steps.env.outputs.env_name }} --auto-approve
+
+      - name: Print service endpoint(s)
+        working-directory: ${{ env.APP_ROOT }}
+        env:
+          CTX_ENV: ${{ steps.env.outputs.env_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/print-ec2.cjs | tee ec2.txt
+          {
+            echo "### Service Endpoints (${{ steps.env.outputs.env_name }})"
+            echo
+            echo '```'
+            cat ec2.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ------------------------------
+  # DESTROY path (manual only)
+  # ------------------------------
+  destroy:
+    name: Destroy (${{ inputs.env }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: ${{ github.workflow }}-destroy-${{ inputs.env }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Confirm
+        shell: bash
+        run: |
+          if [[ "${{ inputs.confirm }}" != "DESTROY" ]]; then
+            echo "Refusing to destroy without confirm=DESTROY"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Compute names
+        id: env
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV="${{ inputs.env }}"
+          echo "env_name=$ENV" >> "$GITHUB_OUTPUT"
+          echo "STACK_NAME=${{ env.PROJECT }}-$ENV" >> "$GITHUB_OUTPUT"
+          echo "S3_ASSETS=${{ env.PROJECT }}-${ENV}-assets" >> "$GITHUB_OUTPUT"
+          echo "ECR_BACK=${{ env.PROJECT }}-${ENV}-backend" >> "$GITHUB_OUTPUT"
+          echo "ECR_FRONT=${{ env.PROJECT }}-${ENV}-frontend" >> "$GITHUB_OUTPUT"
+
+      - name: Empty S3 assets bucket (if exists)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUCKET="${{ steps.env.outputs.S3_ASSETS }}"
+          if aws s3api head-bucket --bucket "$BUCKET" >/dev/null 2>&1; then
+            echo "Emptying s3://$BUCKET"
+            aws s3 rm "s3://$BUCKET" --recursive --only-show-errors || true
+          else
+            echo "Bucket $BUCKET not found, skipping."
+          fi
+
+      - name: Remove all images from ECR repos (if exist)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for REPO in "${{ steps.env.outputs.ECR_BACK }}" "${{ steps.env.outputs.ECR_FRONT }}"; do
+            if aws ecr describe-repositories --repository-names "$REPO" >/dev/null 2>&1; then
+              IMAGES=$(aws ecr list-images --repository-name "$REPO" --query "imageIds[*]" --output json)
+              if [ "$IMAGES" != "[]" ]; then
+                echo "Deleting images in $REPO"
+                aws ecr batch-delete-image --repository-name "$REPO" --image-ids "$IMAGES" >/dev/null || true
+              else
+                echo "No images in $REPO"
+              fi
+            else
+              echo "Repo $REPO not found, skipping."
+            fi
+          done
+
+      - name: Install CDKTF dependencies
+        working-directory: ${{ env.APP_ROOT }}
+        run: npm ci
+
+      - name: Destroy ${{ steps.env.outputs.STACK_NAME }}
+        working-directory: ${{ env.APP_ROOT }}
+        run: npx --yes cdktf-cli@latest destroy ${{ steps.env.outputs.STACK_NAME }} --context env=${{ steps.env.outputs.env_name }} --auto-approve
