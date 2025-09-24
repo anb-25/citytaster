@@ -1,0 +1,53 @@
+{
+  "name": "my-cdktf",
+  "version": "1.0.0",
+  "main": "main.js",
+  "types": "main.ts",
+  "license": "MPL-2.0",
+  "private": true,
+  "scripts": {
+    "get": "cdktf get",
+    "build": "tsc",
+    "synth": "cdktf synth",
+    "compile": "tsc --pretty",
+    "watch": "tsc -w",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "upgrade": "npm i cdktf@latest cdktf-cli@latest",
+    "upgrade:next": "npm i cdktf@next cdktf-cli@next",
+    "plan": "node ./scripts/plan.cjs",
+    "deploy": "cdktf deploy",
+    "destroy": "cdktf destroy",
+    "diff": "cdktf diff",
+    "validate:dev": "node scripts/validate-dev.cjs",
+    "synth:dev": "cd infra/cdktf-app/my-cdktf && npx cdktf synth --context env=dev",
+    "diff:dev": "cd infra/cdktf-app/my-cdktf && npx cdktf diff citytaster-dev",
+    "deploy:dev": "npm run validate:dev && cd infra/cdktf-app/my-cdktf && npx cdktf synth --context env=dev && npx cdktf deploy citytaster-dev --auto-approve",
+    "destroy:dev": "cd infra/cdktf-app/my-cdktf && npx cdktf destroy citytaster-dev --auto-approve",
+    "print:dev": "node scripts/print-ec2.cjs",
+    "validate:prod": "CTX_ENV=prod node scripts/validate-dev.cjs",
+    "synth:prod": "cd infra/cdktf-app/my-cdktf && npx cdktf synth --context env=prod",
+    "diff:prod": "cd infra/cdktf-app/my-cdktf && npx cdktf diff citytaster-prod",
+    "deploy:prod": "npm run validate:prod && cd infra/cdktf-app/my-cdktf && npx cdktf synth --context env=prod && npx cdktf deploy citytaster-prod --auto-approve",
+    "destroy:prod": "cd infra/cdktf-app/my-cdktf && npx cdktf destroy citytaster-prod --auto-approve",
+    "print:prod": "CTX_ENV=prod node scripts/print-ec2.cjs"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "dependencies": {
+    "@cdktf/provider-aws": "^20.1.0",
+    "cdktf": "^0.21.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@cdktf/provider-helm": "11.0.0",
+    "@cdktf/provider-kubernetes": "12.1.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.5.2",
+    "jest": "^30.1.3",
+    "ts-jest": "^29.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}

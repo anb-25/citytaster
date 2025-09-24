@@ -1,0 +1,32 @@
+{
+  "project": "citytaster",
+  "env": "dev",
+  "region": "us-east-1",
+
+  "vpcId": "vpc-0cac535699ae180b4",
+
+  "publicSubnetIds": [
+    "subnet-0ee770d8f36ee7426",
+    "subnet-040edd18bddad5623",
+    "subnet-08ba202da91948787",
+    "subnet-04e5651c85aa7c96e",
+    "subnet-0da328d26c65df2cb",
+    "subnet-0cada2ae84e3cfb0b"
+  ],
+  "privateSubnetIds": [
+  ],
+
+  "sgDefaultId": "sg-08a60aa55344d017e",
+  "sgEc2Id":    "sg-08a60aa55344d017e",
+  "sgVpcId":    "sg-08a60aa55344d017e",
+
+  "clusterName": "citytaster-eks",
+
+  "ecrBackend": "backend",
+  "ecrFrontend": "frontend",
+  "dynamoTable": "citytaster-session-dev",
+
+  "compose": { "dbName": "CityTasterDB" }
+}
+
+

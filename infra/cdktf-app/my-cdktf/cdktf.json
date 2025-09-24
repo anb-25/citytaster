@@ -1,0 +1,14 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node src/main.ts",
+  "codeMakerOutput": "./.gen",
+  "terraformProviders": [
+    "hashicorp/aws@~> 5.0",
+    "hashicorp/kubernetes@~> 2.31",
+    "hashicorp/helm@~> 2.13"
+  ],
+  "context": {
+    "project_name": "citytaster"
+  },
+  "projectId": "8b8e5b50-1658-4711-983a-579c2c3a79cb"
+}

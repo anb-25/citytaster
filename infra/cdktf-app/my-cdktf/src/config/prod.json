@@ -1,0 +1,40 @@
+{
+  "//": "Prod placeholder. Features disabled; prod stack won’t be created unless you pass env=prod.",
+  "project": "citytaster",
+  "env": "prod",
+  "region": "us-east-1",
+
+  "vpcId": "vpc-0cac535699ae180b4",
+  "publicSubnetIds": ["subnet-0ee770d8f36ee7426", "subnet-040edd18bddad5623"],
+  "privateSubnetIds": ["subnet-08ba202da91948787", "subnet-04e5651c85aa7c96e"],
+
+  "sgDefaultId": "sg-08a60aa55344d017e",
+  "sgEc2Id":    "sg-08a60aa55344d017e",
+  "sgVpcId":    "sg-08a60aa55344d017e",
+
+  "clusterName": "citytaster-eks-prod",
+
+  "ecrBackend": "backend",
+  "ecrFrontend": "frontend",
+  "dynamoTable": "citytaster-session-prod",
+
+  "compose": { "dbName": "CityTasterDB" },
+
+  "desired": 3,
+  "minSize": 3,
+  "maxSize": 6,
+  "instanceTypes": ["t3.large"],
+
+  "features": {
+    "useBasicVpc": false,
+    "enableNat": false,
+    "enableEcr": false,
+    "enableS3": false,
+    "enableDynamo": false,
+    "enableEks": false,
+    "enableAlb": false,
+    "enableAcm": false
+  }
+}
+
+
