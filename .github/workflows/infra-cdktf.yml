@@ -21,173 +21,128 @@ name: infra-cdktf
 
 on:
   push:
-    branches:
-      - main         # Auto-deploy dev on merges to main
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       env:
-        description: "Environment to deploy (dev or prod)"
+        description: Environment to deploy
         type: choice
         required: true
         default: dev
         options: [dev, prod]
       build_images:
-        description: "Build & push Docker images to ECR before deploy?"
+        description: Build & push Docker images first?
         type: boolean
         required: true
         default: true
 
-# Common environment variables (tune as needed)
 env:
-  AWS_REGION: us-east-1                          # Your AWS region
-  APP_ROOT: infra/cdktf-app/my-cdktf            # CDKTF working directory
-  PROJECT: citytaster                            # Used to form stack name: citytaster-<env>
+  AWS_REGION: us-east-1
+  APP_ROOT: infra/cdktf-app/my-cdktf
+  PROJECT: citytaster
 
 jobs:
   deploy:
     name: Deploy (${{ github.event_name == 'workflow_dispatch' && inputs.env || 'dev' }})
     runs-on: ubuntu-latest
-
-    # Required for GitHub OIDC
     permissions:
       contents: read
       id-token: write
-
-    # Prevent overlapping runs per environment (e.g., two dev deploys at once)
     concurrency:
       group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.env || 'dev' }}
       cancel-in-progress: true
 
     steps:
-      # -----------------------------
-      # 0) Checkout repository
-      # -----------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
-      # -----------------------------
-      # 1) Select environment (dev on push; user choice on dispatch)
-      # -----------------------------
       - name: Resolve environment (dev/prod)
         id: env
+        shell: bash
         run: |
-          # On push → default to dev; on manual → use input
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ENV="${{ inputs.env }}"
           else
             ENV="dev"
           fi
           echo "env_name=$ENV" >> "$GITHUB_OUTPUT"
-          echo "STACK_NAME=${PROJECT}-$ENV" >> "$GITHUB_OUTPUT"
-        env:
-          PROJECT: ${{ env.PROJECT }}
+          echo "STACK_NAME=${{ env.PROJECT }}-$ENV" >> "$GITHUB_OUTPUT"
 
-      # -----------------------------
-      # 2) Setup Node.js for CDKTF tooling
-      # -----------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # -----------------------------
-      # 3) Configure AWS credentials via OIDC
-      #    - role-to-assume must be an IAM role that trusts your repo OIDC
-      #    - You can use the SAME role for dev/prod for now.
-      # -----------------------------
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }} # e.g. arn:aws:iam::<acct>:role/citytaster-cdktf-deployer
+          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # -----------------------------
-      # 4) Authenticate Docker to ECR
-      # -----------------------------
       - name: Login to ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # -----------------------------
-      # 5) Optionally build & push images to ECR
-      #    - Enables fully-automatic app refresh on each deploy.
-      #    - Image names follow: <account>.dkr.ecr.<region>.amazonaws.com/citytaster-<env>-{backend|frontend}:latest
-      # -----------------------------
+      # Build & push images unless manual run with build_images=false
       - name: Build & push backend image
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_images || github.event_name != 'workflow_dispatch' }}  # default true on push
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_images }}
+        shell: bash
         run: |
           ENV="${{ steps.env.outputs.env_name }}"
           BACKEND_URI="${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-${ENV}-backend"
-          echo "Building backend → $BACKEND_URI:latest"
-          docker build -t "$BACKEND_URI:latest" -f backend/Dockerfile backend
+          echo "Building $BACKEND_URI:latest"
+          docker build -f backend/Dockerfile -t "$BACKEND_URI:latest" backend
           docker push "$BACKEND_URI:latest"
 
       - name: Build & push frontend image
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_images || github.event_name != 'workflow_dispatch' }}  # default true on push
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_images }}
+        shell: bash
         run: |
           ENV="${{ steps.env.outputs.env_name }}"
           FRONTEND_URI="${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-${ENV}-frontend"
-          echo "Building frontend → $FRONTEND_URI:latest"
-          docker build -t "$FRONTEND_URI:latest" -f frontend/Dockerfile frontend
+          echo "Building $FRONTEND_URI:latest"
+          docker build -f frontend/Dockerfile -t "$FRONTEND_URI:latest" frontend
           docker push "$FRONTEND_URI:latest"
 
-      # -----------------------------
-      # 6) Install CDKTF dependencies + provider bindings
-      # -----------------------------
       - name: Install CDKTF dependencies
         working-directory: ${{ env.APP_ROOT }}
         run: |
           npm ci
-          # Generate provider bindings (idempotent)
-          npx cdktf provider add "aws@~> 5.0" "kubernetes@~> 2.31" "helm@~> 2.13"
+          npx cdktf provider add "aws@~> 5.0"
 
-      # -----------------------------
-      # 7) Validate configuration against AWS (fast fail)
-      #    - Checks VPC/Subnets/SecurityGroups exist before infra changes
-      # -----------------------------
       - name: Validate ${{ steps.env.outputs.env_name }} config
+        working-directory: ${{ env.APP_ROOT }}
         env:
           CTX_ENV: ${{ steps.env.outputs.env_name }}
         run: node scripts/validate-dev.cjs
 
-      # -----------------------------
-      # 8) Synthesize the selected stack
-      #    - CDKTF will only create the stack matching --context env=<env>
-      #    - Keeps prod code in repo but unused unless env=prod is selected
-      # -----------------------------
       - name: Synthesize CDKTF
         working-directory: ${{ env.APP_ROOT }}
         run: npx cdktf synth --context env=${{ steps.env.outputs.env_name }}
 
-      # (Optional) Upload synthesized output for troubleshooting
       - name: Upload cdktf.out (artifact)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cdktf.out-${{ steps.env.outputs.env_name }}
           path: ${{ env.APP_ROOT }}/cdktf.out
-          retention-days: 7
 
-      # -----------------------------
-      # 9) Deploy the selected stack
-      #    - For dev: citytaster-dev
-      #    - For prod: citytaster-prod (still placeholder until you enable features)
-      # -----------------------------
-      - name: Deploy ${{ steps.env.outputs.stack_name }}
+      - name: Deploy ${{ steps.env.outputs.STACK_NAME }}
         working-directory: ${{ env.APP_ROOT }}
-        run: npx cdktf deploy ${{ steps.env.outputs.stack_name }} --auto-approve
+        run: npx cdktf deploy ${{ steps.env.outputs.STACK_NAME }} --context env=${{ steps.env.outputs.env_name }} --auto-approve
 
-      # -----------------------------
-      # 10) Post-deploy: print the EC2 public DNS/IP (dev compose host)
-      #     - Safe for prod too; script reads CTX_ENV and will no-op if no EC2
-      # -----------------------------
       - name: Print service endpoint(s)
+        working-directory: ${{ env.APP_ROOT }}
         env:
           CTX_ENV: ${{ steps.env.outputs.env_name }}
+        shell: bash
         run: |
           node scripts/print-ec2.cjs | tee ec2.txt
-          echo "### Service Endpoints (${{ steps.env.outputs.env_name }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat ec2.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### Service Endpoints (${{ steps.env.outputs.env_name }})"
+            echo
+            echo '```'
+            cat ec2.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
