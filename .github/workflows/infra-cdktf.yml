@@ -89,20 +89,20 @@ jobs:
         shell: bash
         run: |
           ENV="${{ steps.env.outputs.env_name }}"
-          BACKEND_URI="${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-${ENV}-backend"
-          echo "Building $BACKEND_URI:latest"
-          docker build -f backend/Dockerfile -t "$BACKEND_URI:latest" backend
-          docker push "$BACKEND_URI:latest"
+          URI="${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-${ENV}-backend"
+          echo "Building $URI:latest from deployment/Dockerfile.backend"
+          docker build -t "$URI:latest" -f deployment/Dockerfile.backend .
+          docker push "$URI:latest"
 
       - name: Build & push frontend image
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_images }}
         shell: bash
         run: |
           ENV="${{ steps.env.outputs.env_name }}"
-          FRONTEND_URI="${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-${ENV}-frontend"
-          echo "Building $FRONTEND_URI:latest"
-          docker build -f frontend/Dockerfile -t "$FRONTEND_URI:latest" frontend
-          docker push "$FRONTEND_URI:latest"
+          URI="${{ steps.ecr.outputs.registry }}/${{ env.PROJECT }}-${ENV}-frontend"
+          echo "Building $URI:latest from deployment/Dockerfile.frontend"
+          docker build -t "$URI:latest" -f deployment/Dockerfile.frontend .
+          docker push "$URI:latest"
 
       - name: Install CDKTF dependencies
         working-directory: ${{ env.APP_ROOT }}
