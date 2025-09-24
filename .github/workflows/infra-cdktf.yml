@@ -108,7 +108,7 @@ jobs:
         working-directory: ${{ env.APP_ROOT }}
         run: |
           npm ci
-          npx cdktf provider add "aws@~> 5.0"
+          npx --yes cdktf-cli@latest provider add "aws@~> 5.0"
 
       - name: Validate ${{ steps.env.outputs.env_name }} config
         working-directory: ${{ env.APP_ROOT }}
