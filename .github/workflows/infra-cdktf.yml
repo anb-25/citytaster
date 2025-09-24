@@ -49,9 +49,6 @@ env:
   PROJECT: citytaster
 
 jobs:
-  # ------------------------------
-  # APPLY (deploy) path
-  # ------------------------------
   deploy:
     name: Deploy (${{ github.event_name == 'workflow_dispatch' && inputs.env || 'dev' }})
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.action == 'apply' }}
@@ -121,6 +118,10 @@ jobs:
           npm ci
           npx --yes cdktf-cli@latest --version
 
+      - name: Generate providers (.gen)
+        working-directory: ${{ env.APP_ROOT }}
+        run: npx --yes cdktf-cli@latest get
+
       - name: Validate ${{ steps.env.outputs.env_name }} config
         working-directory: ${{ env.APP_ROOT }}
         env:
@@ -158,9 +159,6 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # ------------------------------
-  # DESTROY path (manual only)
-  # ------------------------------
   destroy:
     name: Destroy (${{ inputs.env }})
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' }}
@@ -239,6 +237,10 @@ jobs:
       - name: Install CDKTF dependencies
         working-directory: ${{ env.APP_ROOT }}
         run: npm ci
+
+      - name: Generate providers (.gen)
+        working-directory: ${{ env.APP_ROOT }}
+        run: npx --yes cdktf-cli@latest get
 
       - name: Destroy ${{ steps.env.outputs.STACK_NAME }}
         working-directory: ${{ env.APP_ROOT }}
