@@ -109,10 +109,14 @@ jobs:
           EOF
           )
 
+          # Use a real JSON params file (not --parameters "commands=[...]" shorthand) --
+          # the shorthand parser mangles embedded newlines in multi-line strings.
+          jq -n --arg script "$SCRIPT" '{commands: [$script]}' > ssm-params.json
+
           CMD_ID=$(aws ssm send-command \
             --instance-ids "${{ steps.ec2.outputs.id }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[$(jq -Rs . <<< "$SCRIPT")]" \
+            --parameters file://ssm-params.json \
             --comment "citytaster deploy ${{ github.sha }}" \
             --query "Command.CommandId" --output text)
           echo "Command ID: $CMD_ID"
