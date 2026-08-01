@@ -1,21 +1,20 @@
 # infra/main.tf
 # PURPOSE: Root Terraform configuration. Sets AWS provider, region, and version constraints for infrastructure deployment.
+# NOTE: This replaces the CDKTF app that used to live in infra/cdktf-app/my-cdktf; it mirrors what that
+#       DevStack provisioned (imported VPC, ECR, S3, DynamoDB, GitHub OIDC deploy role, EC2 via docker-compose).
 
 data "aws_caller_identity" "current" {}
 
-# This block locks the Terraform version and AWS provider version for consistency.
 terraform {
-  required_version = ">= 1.3.0"  # Ensures you're using at least Terraform 1.3.
+  required_version = ">= 1.3.0"
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      # version = "~> 5.0"          # Ensures compatibility with AWS provider v5.x.
+      source = "hashicorp/aws"
     }
-    
-    # optional: declare random since you use random_id in s3.tf
-    random = {
-      source = "hashicorp/random"
-    }  
   }
+}
+
+provider "aws" {
+  region = var.region
 }
 

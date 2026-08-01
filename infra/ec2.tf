@@ -1,37 +1,23 @@
 # infra/ec2.tf
-# PURPOSE: Provisions the EC2 instance for deployment, configures AMI, networking, and user data for initialization.
+# PURPOSE: One t3.micro instance that runs the app's docker-compose.yml (mongo + backend + frontend,
+#          frontend's own nginx handles the /api reverse proxy). user_data only bootstraps
+#          Docker/Compose/AWS CLI; the actual compose file + data are delivered by the deploy
+#          pipeline (GitHub Actions -> S3 -> SSM RunCommand), not baked into the AMI/user_data.
+#          Reached only via SSM Session Manager -- no SSH key, no port 22.
 
-# Ubuntu 22.04 LTS AMI for us-east-1 (check for latest AMI if needed)
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"]  # Canonical (official Ubuntu images)
+resource "aws_instance" "app" {
+  ami                    = "ami-08c40ec9ead489470" # Amazon Linux 2023, us-east-1
+  instance_type          = "t3.micro"
+  # local.public_subnet_ids comes from a data source with no guaranteed order, and this VPC has a
+  # subnet (us-east-1e) that doesn't support t3.micro -- pin to the first subnet from tfvars instead,
+  # which is us-east-1a.
+  subnet_id              = var.public_subnet_ids[0]
+  vpc_security_group_ids = [aws_security_group.web.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
 
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-  }
-}
-
-# The EC2 instance itself
-resource "aws_instance" "main" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.ec2.id]
-  key_name               = var.key_name
-
-  # Attach IAM instance profile for S3/ECR access
-  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  user_data_base64 = base64encode(templatefile("${path.module}/user_data.yaml.tpl", {}))
 
   tags = {
-    Name = "citytaster-ec2"
+    Name = "${var.project}-${var.environment}-app"
   }
-
-  # IMPORTANT: coalesce to empty string to avoid nulls in templatefile
-  user_data = templatefile("${path.module}/user_data.sh", {
-    GITHUB_DEPLOY_KEY = var.github_deploy_key # now guaranteed non-null
-    S3_BUCKET_NAME    = aws_s3_bucket.csv_data.bucket
-    AWS_REGION        = var.aws_region
-    AWS_ACCOUNT_ID    = data.aws_caller_identity.current.account_id
-  })
 }

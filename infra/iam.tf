@@ -1,67 +1,96 @@
 # infra/iam.tf
-# PURPOSE: Configures IAM roles and policies to grant EC2 permissions for accessing ECR and S3.
+# PURPOSE: (1) GitHub OIDC deploy role for CI, (2) EC2 instance role (SSM + ECR pull).
 
+# ---- GitHub OIDC deploy role ----
 
-# IAM Role that the EC2 instance will assume to get AWS permissions
-resource "aws_iam_role" "ec2_role" {
-  name = "citytaster-ec2-role"
+resource "aws_iam_openid_connect_provider" "github" {
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
 
-  # This trust policy lets EC2 instances assume the role
+  # current + legacy thumbprints for stability
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "a031c46782e6e6c662c2c87c76da9aa62ccafd8e",
+  ]
+}
+
+resource "aws_iam_role" "deploy" {
+  name = var.deploy_role_name
+
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow",
-      Principal = {
-        Service = "ec2.amazonaws.com"  # Only EC2 can assume this role
-      },
-      Action = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          # limit to this repository
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
+        }
+      }
     }]
   })
 }
 
-# Policy: EC2 can pull Docker images from ECR and read CSV files from S3
-resource "aws_iam_policy" "ec2_policy" {
-  name        = "citytaster-ec2-policy"
-  description = "Allow EC2 to access ECR and S3 buckets"
+# For dev speed, AdministratorAccess by default; set deploy_role_admin=false to tighten.
+resource "aws_iam_role_policy_attachment" "deploy" {
+  role       = aws_iam_role.deploy.name
+  policy_arn = var.deploy_role_admin ? "arn:aws:iam::aws:policy/AdministratorAccess" : "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# ---- EC2 instance role ----
+
+resource "aws_iam_role" "ec2" {
+  name = "${var.project}-${var.environment}-app-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ecr_readonly" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+# Lets the instance pull docker-compose.yml + data/*.csv from the assets bucket during deploy
+# (the deploy pipeline uploads them to s3://<assets-bucket>/deploy/ and /data/).
+resource "aws_iam_role_policy" "ec2_s3_assets_read" {
+  name = "${var.project}-${var.environment}-ec2-s3-assets-read"
+  role = aws_iam_role.ec2.id
 
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [
-      # ECR permissions: pull images
       {
-        Effect = "Allow",
-        Action = [
-          "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage"
-        ],
-        Resource = "*"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.assets.arn
       },
-      # S3 permissions: list and get objects in your bucket
       {
-        Effect = "Allow",
-        Action = [
-          "s3:GetObject",
-          "s3:ListBucket"
-        ],
-        Resource = [
-          "arn:aws:s3:::${aws_s3_bucket.csv_data.bucket}",      # Bucket itself
-          "arn:aws:s3:::${aws_s3_bucket.csv_data.bucket}/*"    # All objects inside bucket
-        ]
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.assets.arn}/*"
       }
     ]
   })
 }
 
-# Attach the above policy to the EC2 role
-resource "aws_iam_role_policy_attachment" "attach" {
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = aws_iam_policy.ec2_policy.arn
-}
-
-# Create an Instance Profile for EC2 (this is how you assign a role to an instance)
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "citytaster-ec2-profile"
-  role = aws_iam_role.ec2_role.name
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${var.project}-${var.environment}-app-profile"
+  role = aws_iam_role.ec2.name
 }

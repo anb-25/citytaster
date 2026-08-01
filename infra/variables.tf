@@ -1,71 +1,85 @@
 # infra/variables.tf
-# PURPOSE: Defines input variables for region, instance type, key name, database name, and sensitive deploy key.
+# PURPOSE: Input variables for the dev stack (ported from src/config/dev.json + main.ts wiring).
 
-variable "aws_region" {
+variable "project" {
   type        = string
-  default     = "us-east-1"
-  description = "AWS region"
-  validation {
-    # Avoid HCL escapes: accept ...-<digit(s)> at the end
-    condition     = can(regex("^[a-z]{2}-[a-z0-9-]+-[0-9]{1,2}$", var.aws_region))
-    error_message = "Invalid AWS region format (e.g., us-east-1)."
-  }
-}
-
-variable "s3_bucket_name" {
-  type        = string
-  description = "Name of the S3 bucket used by this stack (e.g., for CSV data)."
-  validation {
-    # S3 bucket naming rules (lowercase, digits, hyphen, dot; 3–63 chars)
-    condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.s3_bucket_name))
-    error_message = "s3_bucket_name must comply with S3 naming rules (lowercase letters, numbers, hyphens, dots; 3–63 chars)."
-  }
-}
-
-variable "vpc_id" {
-  type        = string
-  description = "VPC ID"
-  validation {
-    # Accept 8- or 17-hex VPC IDs; trims surrounding whitespace safely
-    condition     = can(regex("^vpc-[0-9a-f]{8,}$", trimspace(var.vpc_id)))
-    error_message = "vpc_id must look like vpc-xxxxxxxx or vpc-xxxxxxxxxxxxxxxxx."
-  }
-}
-
-variable "instance_type" {
-  type        = string
-  default     = "t2.micro"
-  description = "EC2 instance type"
-}
-
-variable "key_name" {
-  type        = string
-  description = "Name of the SSH key pair for EC2 login"
-}
-
-variable "db_name" {
-  type        = string
-  default     = "CityTasterDB"
-  description = "Mongo database name"
-}
-
-variable "github_deploy_key" {
-  type        = string
-  sensitive   = true
-  default     = "" # non-null, empty by default
-  description = "Private SSH deploy key for cloning private repo"
+  default     = "citytaster"
+  description = "Project name, used as a resource name prefix."
 }
 
 variable "environment" {
   type        = string
-  description = "Environment name (e.g., dev/stage/prod)."
   default     = "dev"
+  description = "Environment name (dev/prod)."
 }
 
-variable "tags" {
-  type        = map(string)
-  description = "Common resource tags."
-  default     = {}
+variable "region" {
+  type        = string
+  default     = "us-east-1"
+  description = "AWS region."
 }
 
+variable "vpc_id" {
+  type        = string
+  description = "Existing VPC to import (no VPC is created)."
+}
 
+variable "public_subnet_ids" {
+  type        = list(string)
+  default     = []
+  description = "Existing public subnet IDs. Leave empty to use all subnets in the VPC."
+}
+
+variable "private_subnet_ids" {
+  type        = list(string)
+  default     = []
+  description = "Existing private subnet IDs. Leave empty to use all subnets in the VPC."
+}
+
+variable "sg_default_id" {
+  type        = string
+  default     = ""
+  description = "Existing default security group ID. Leave empty to look up the VPC's 'default' SG."
+}
+
+variable "ecr_backend_name" {
+  type        = string
+  default     = "backend"
+  description = "Suffix for the backend ECR repo name (full name is <project>-<environment>-<this>)."
+}
+
+variable "ecr_frontend_name" {
+  type        = string
+  default     = "frontend"
+  description = "Suffix for the frontend ECR repo name (full name is <project>-<environment>-<this>)."
+}
+
+variable "dynamo_table_name" {
+  type        = string
+  default     = "citytaster-session-dev"
+  description = "DynamoDB table name for sessions/state."
+}
+
+variable "compose_db_name" {
+  type        = string
+  default     = "CityTasterDB"
+  description = "Mongo database name used by the backend container."
+}
+
+variable "github_repo" {
+  type        = string
+  default     = "anb-25/citytaster"
+  description = "GitHub <owner>/<repo> allowed to assume the deploy role via OIDC."
+}
+
+variable "deploy_role_name" {
+  type        = string
+  default     = "citytaster-dev-deployer"
+  description = "Name of the IAM role GitHub Actions assumes via OIDC."
+}
+
+variable "deploy_role_admin" {
+  type        = bool
+  default     = true
+  description = "If true, attach AdministratorAccess to the deploy role; otherwise ReadOnlyAccess."
+}

@@ -1,111 +1,449 @@
-/* Use Google Fonts for modern, readable look */
+/* ==========================================================================
+   CityTaster — editorial food-blog design system
+   ========================================================================== */
+
+:root {
+  --font-display: 'Fraunces', 'Georgia', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --color-bg: #fbf6ee;
+  --color-bg-alt: #f3ead9;
+  --color-surface: #ffffff;
+  --color-text: #2b2420;
+  --color-text-muted: #766a5c;
+
+  --color-primary: #c1440e;
+  --color-primary-dark: #9a350a;
+  --color-secondary: #3f5d4f;
+  --color-gold: #d4a017;
+
+  --color-border: #e8dcc6;
+  --shadow-soft: 0 2px 18px rgba(43, 36, 32, 0.07);
+  --shadow-lift: 0 14px 36px rgba(43, 36, 32, 0.14);
+
+  --radius-md: 14px;
+  --radius-lg: 22px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  font-family: 'Montserrat', 'Roboto', Arial, sans-serif;
-  background: #faf9f6;
-  color: #232323;
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text);
   margin: 0;
   padding: 0;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Center content and add padding */
+/* Subtle warm texture behind everything */
+#root {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(193, 68, 14, 0.06), transparent 45%),
+    radial-gradient(circle at 100% 20%, rgba(63, 93, 79, 0.05), transparent 40%),
+    var(--color-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------- Layout ------------------------------ */
+
 .container {
-  max-width: 1000px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 32px 18px 80px 18px;
+  padding: 0 20px 80px;
+  flex: 1;
+  width: 100%;
 }
 
-/* Modern header styles */
-h1, h2, h3 {
-  color: #FF5722;
-  margin-bottom: 0.3em;
+/* ---------------------------------- Header ------------------------------ */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(251, 246, 238, 0.88);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-header-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.site-logo {
+  font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 1.5rem;
+  color: var(--color-text);
+  text-decoration: none;
+  letter-spacing: 0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.site-logo:hover {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.site-logo .site-logo-mark {
+  font-size: 1.3rem;
+}
+
+.site-tagline {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .site-tagline {
+    display: block;
+  }
+}
+
+/* ---------------------------------- Footer ------------------------------ */
+
+.site-footer {
+  border-top: 1px solid var(--color-border);
+  padding: 28px 20px 34px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+.site-footer strong {
+  color: var(--color-text);
+}
+
+/* ---------------------------------- Hero --------------------------------- */
+
+.hero {
+  padding: 56px 0 36px;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  background: rgba(193, 68, 14, 0.09);
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 18px;
+}
+
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 4vw, 3.1rem);
+  line-height: 1.15;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 auto 14px;
+  max-width: 780px;
+  letter-spacing: -0.01em;
+}
+
+.hero p.hero-subtitle {
+  max-width: 620px;
+  margin: 0 auto;
+  color: var(--color-text-muted);
+  font-size: 1.08rem;
+  line-height: 1.6;
+}
+
+/* Map card that houses the interactive US map */
+
+.map-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: clamp(10px, 3vw, 28px);
+  margin-top: 20px;
+  overflow: hidden;
+  /* Break out of .container: a map benefits from real screen width far more than
+     prose does, so let it use the full viewport instead of sharing the same
+     column as the header/hero text. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+.map-card svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.map-hint {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+  margin-top: 14px;
+}
+
+/* ---------------------------------- Headings ----------------------------- */
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  color: var(--color-text);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.3em;
 }
 
 .section-title {
-  margin-top: 2rem;
-  margin-bottom: 1.3rem;
-  font-size: 2.2rem;
-  border-bottom: 2px solid #FF5722;
-  display: inline-block;
-  padding-bottom: 2px;
+  margin-top: 0.4rem;
+  margin-bottom: 1.1rem;
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+  position: relative;
+  padding-bottom: 12px;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 56px;
+  height: 3px;
+  background: var(--color-primary);
+  border-radius: 3px;
+}
+
+/* ---------------------------------- City hero ---------------------------- */
+
+.city-hero {
+  padding: 44px 0 8px;
 }
 
 .city-description {
-  max-width: 850px;
-  line-height: 1.7;
-  font-size: 1.16rem;
-  margin-bottom: 2.4rem;
+  max-width: 720px;
+  line-height: 1.75;
+  font-size: 1.12rem;
+  color: var(--color-text-muted);
+  margin: 0 0 1.8rem;
+}
+
+.city-video-link {
+  margin-bottom: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+/* Category pill navigation (Food / Dessert / Datenight) */
+
+.category-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.category-card {
+  flex: 1 1 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 22px 22px 20px;
+  text-decoration: none;
+  color: var(--color-text);
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  cursor: pointer;
+}
+
+.category-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lift);
+  border-color: var(--color-primary);
+  text-decoration: none;
+}
+
+.category-card .category-icon {
+  font-size: 1.7rem;
+}
+
+.category-card .category-label {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.category-card .category-hint {
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------- Spot cards --------------------------- */
+
+.spot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 26px;
+  margin-top: 8px;
 }
 
 .spot-card {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 2px 18px rgba(0,0,0,0.07);
-  padding: 24px;
-  margin-bottom: 38px;
-  max-width: 730px;
-  transition: box-shadow 0.2s, transform 0.16s;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  padding: 26px;
+  max-width: 100%;
+  transition: box-shadow 0.2s, transform 0.16s, border-color 0.2s;
+  position: relative;
 }
 
 .spot-card:hover {
-  box-shadow: 0 6px 36px rgba(255,87,34,0.13);
-  transform: translateY(-3px) scale(1.012);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-3px);
+  border-color: rgba(193, 68, 14, 0.35);
+}
+
+.spot-card h3 {
+  font-size: 1.28rem;
+  padding-right: 70px;
+}
+
+.spot-card .spot-meta {
+  color: var(--color-text-muted);
+  font-size: 0.97rem;
+  margin: 0 0 6px;
+}
+
+.spot-card .spot-meta strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.spot-card .spot-description {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  line-height: 1.6;
 }
 
 .spot-links {
-  margin-top: 0.5em;
-  margin-bottom: 1.2em;
+  margin-top: 0.7em;
+  margin-bottom: 0.4em;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-wrap: wrap;
+  gap: 10px 18px;
 }
 
 .star-rating {
-  color: #FFB400;
-  font-size: 1.1em;
-  vertical-align: middle;
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  color: var(--color-gold);
+  font-weight: 700;
+  font-size: 0.98em;
+  background: rgba(212, 160, 23, 0.12);
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
+.empty-state {
+  color: var(--color-text-muted);
+  font-size: 1.05rem;
+  padding: 40px 0;
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.loading-state {
+  padding: 80px 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+/* ---------------------------------- Links & buttons ----------------------- */
+
 a {
-  color: #1a63d3;
+  color: var(--color-secondary);
   text-decoration: none;
   transition: color 0.2s;
 }
 a:hover {
-  color: #FF5722;
+  color: var(--color-primary);
   text-decoration: underline;
 }
 
 button, .btn {
-  background: #FF5722;
+  background: var(--color-primary);
   color: #fff;
   border: none;
-  padding: 15px 28px;
-  border-radius: 9px;
-  font-size: 1.15rem;
+  padding: 13px 26px;
+  border-radius: 999px;
+  font-size: 1rem;
   cursor: pointer;
-  margin-right: 18px;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  transition: background 0.18s, box-shadow 0.18s;
-  font-family: inherit;
-  font-weight: 500;
+  box-shadow: var(--shadow-soft);
+  transition: background 0.18s, box-shadow 0.18s, transform 0.15s;
+  font-family: var(--font-body);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 button:hover, .btn:hover {
-  background: #d84315;
-  box-shadow: 0 6px 24px rgba(255,87,34,0.18);
+  background: var(--color-primary-dark);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
 }
 
-/* Space between video link and buttons */
-.city-video-link {
-  margin-bottom: 32px;
-  display: inline-block;
+.btn-back {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  box-shadow: none;
+  padding: 10px 18px;
+  margin-bottom: 28px;
+}
+.btn-back:hover {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-soft);
+  transform: none;
+}
+
+/* ---------------------------------- Page transitions ---------------------- */
+
+.page-transition {
+  width: 100%;
 }
 
 @media (max-width: 700px) {
-  .container { padding: 12px; }
-  .spot-card { padding: 14px; }
-  .section-title { font-size: 1.5rem; }
-  button, .btn { font-size: 1rem; padding: 10px 14px; }
+  .container { padding: 0 14px 60px; }
+  .spot-card { padding: 18px; }
+  .spot-grid { grid-template-columns: 1fr; gap: 18px; }
+  .hero { padding: 36px 0 24px; }
+  .category-nav { flex-direction: column; }
 }

@@ -1,3 +1,10 @@
+# =====================================================================
+# FILE: .github/workflows/test-deploy.yml
+# PURPOSE: Build+push images to ECR, sync data/docker-compose.yml to S3,
+#          then deploy on the always-on EC2 instance via SSM RunCommand
+#          (no SSH key, no port 22 -- the instance is reached only through
+#          AWS Systems Manager, using the OIDC role Terraform created).
+# =====================================================================
 name: CityTaster Deploy
 
 on:
@@ -5,161 +12,138 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  DB_NAME: CityTasterDB
+  S3_BUCKET: citytaster-dev-assets
+  EC2_NAME_TAG: citytaster-dev-app
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    env:
-      AWS_REGION: us-east-1
-      DB_NAME: CityTasterDB
-
     steps:
-      # Checkout latest code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Docker Buildx for multi-platform build support
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Configure AWS credentials for CLI and Docker
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Ensure EC2 is running (idempotent)
-      - name: Ensure EC2 is running
-        shell: bash
-        env:
-          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
-        run: |
-          set -euo pipefail
-          STATE=$(aws ec2 describe-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" \
-            --query "Reservations[0].Instances[0].State.Name" --output text)
-          echo "Current state: $STATE"
-          case "$STATE" in
-            running)  echo "Already running."; ;;
-            stopped)  aws ec2 start-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" >/dev/null ;;
-            stopping) aws ec2 wait instance-stopped --instance-ids "$EC2_ID" --region "$AWS_REGION"
-                      aws ec2 start-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" >/dev/null ;;
-            pending)  : ;; # already starting
-            shutting-down|terminated) echo "Instance is $STATE; cannot start."; exit 1 ;;
-            *) echo "Unexpected state: $STATE"; exit 1 ;;
-          esac
-          aws ec2 wait instance-running --instance-ids "$EC2_ID" --region "$AWS_REGION"
+      - name: Resolve AWS account ID
+        id: account
+        run: echo "id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
 
-      # Get EC2 public IP dynamically (as a step output)
-      - name: Get EC2 public IP
-        id: ec2ip
-        shell: bash
-        env:
-          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
-        run: |
-          set -euo pipefail
-          ip=$(aws ec2 describe-instances --instance-ids "$EC2_ID" --region "$AWS_REGION" \
-               --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
-          echo "public_ip=$ip" >> "$GITHUB_OUTPUT"
-          echo "EC2_PUBLIC_IP=$ip" >> "$GITHUB_ENV"
-          echo "Public IP is $ip"
-
-      # Login to ECR for docker pushes
       - name: Login to Amazon ECR
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Build and push backend Docker image
-      - name: Build and push backend Docker image
+      - name: Build and push backend image
         run: |
           docker buildx build \
             --push \
             --file deployment/Dockerfile.backend \
-            -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-backend:latest" \
+            -t "${{ steps.ecr.outputs.registry }}/citytaster-backend:latest" \
             .
 
-      # Build and push frontend Docker image
-      - name: Build and push frontend Docker image
+      - name: Build and push frontend image
         run: |
           docker buildx build \
             --push \
             --file deployment/Dockerfile.frontend \
-            -t "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/citytaster-frontend:latest" \
+            -t "${{ steps.ecr.outputs.registry }}/citytaster-frontend:latest" \
             .
 
-      # Sync data directory to S3
-      - name: Sync data folder to S3
+      - name: Sync data + compose file to S3
         run: |
-          aws s3 sync ./data "s3://${{ secrets.S3_BUCKET_NAME }}/data"
+          aws s3 sync ./data "s3://${{ env.S3_BUCKET }}/data" --delete
+          aws s3 cp ./docker-compose.yml "s3://${{ env.S3_BUCKET }}/deploy/docker-compose.yml"
 
-      # Deploy to EC2 using SSH and docker compose
-      - name: Deploy on EC2 via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ steps.ec2ip.outputs.public_ip }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -euo pipefail
+      - name: Resolve EC2 instance ID
+        id: ec2
+        run: |
+          set -euo pipefail
+          ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ env.EC2_NAME_TAG }}" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" --output text)
+          if [[ "$ID" == "None" || -z "$ID" ]]; then
+            echo "::error ::No running EC2 instance tagged Name=${{ env.EC2_NAME_TAG }} found."
+            exit 1
+          fi
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
 
-            # Ensure working dir
-            cd "$HOME"
-            mkdir -p app
-            cd app
+      - name: Deploy via SSM RunCommand
+        id: deploy
+        run: |
+          set -euo pipefail
+          SCRIPT=$(cat <<EOF
+          set -euo pipefail
+          mkdir -p /home/ec2-user/app/data
+          cd /home/ec2-user/app
+          aws s3 cp s3://${{ env.S3_BUCKET }}/deploy/docker-compose.yml ./docker-compose.yml
+          aws s3 sync s3://${{ env.S3_BUCKET }}/data ./data --delete
+          cat > .env <<ENVEOF
+          AWS_ACCOUNT_ID=${{ steps.account.outputs.id }}
+          AWS_REGION=${{ env.AWS_REGION }}
+          DB_NAME=${{ env.DB_NAME }}
+          ENVEOF
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          docker-compose pull
+          docker-compose up -d mongo
+          for csv in ./data/*.csv; do
+            collection=\$(basename "\$csv" .csv)
+            echo "[INFO] Importing \$csv -> \$collection"
+            docker-compose exec -T mongo mongoimport --db ${{ env.DB_NAME }} --collection "\$collection" --type csv --headerline --file "/data/\${collection}.csv" --drop
+          done
+          docker-compose up -d
+          docker image prune -af
+          EOF
+          )
 
-            # Pull latest data from S3 to a local ./data folder
-            aws s3 sync "s3://${{ secrets.S3_BUCKET_NAME }}/data" ./data --region "${{ env.AWS_REGION }}"
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.ec2.outputs.id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[$(jq -Rs . <<< "$SCRIPT")]" \
+            --comment "citytaster deploy ${{ github.sha }}" \
+            --query "Command.CommandId" --output text)
+          echo "Command ID: $CMD_ID"
 
-            # Login to ECR on the instance (for pulls)
-            aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
-              | docker login --username AWS --password-stdin \
-                "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-
-            # Pick docker compose command
-            if command -v docker-compose >/dev/null 2>&1; then
-              DC="docker-compose"
-            else
-              DC="docker compose"
+          while true; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$CMD_ID" --instance-id "${{ steps.ec2.outputs.id }}" \
+              --query "Status" --output text 2>/dev/null || echo "Pending")
+            echo "Status: $STATUS"
+            if [[ "$STATUS" != "Pending" && "$STATUS" != "InProgress" && "$STATUS" != "Delayed" ]]; then
+              break
             fi
+            sleep 5
+          done
 
-            # Pull latest images
-            $DC pull
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ steps.ec2.outputs.id }}" \
+            --query "StandardOutputContent" --output text
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ steps.ec2.outputs.id }}" \
+            --query "StandardErrorContent" --output text >&2
 
-            # Start database first so imports work
-            $DC up -d mongo || true
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "::error ::Deploy command finished with status $STATUS"
+            exit 1
+          fi
 
-            # Import CSVs -> collections (requires ./data mounted to /data in mongo service)
-            if ls ./data/*.csv >/dev/null 2>&1; then
-              for csv in ./data/*.csv; do
-                collection=$(basename "$csv" .csv)
-                echo "[INFO] Importing $csv -> $collection"
-                $DC exec -T mongo mongoimport \
-                  --db CityTasterDB \
-                  --collection "$collection" \
-                  --type csv --headerline --file "/data/${collection}.csv" --drop
-              done
-            else
-              echo "[INFO] No CSV files to import."
-            fi
-
-            # Bring everything up
-            $DC up -d
-
-            # Clean up dangling images
-            docker image prune -af || true
-
-      # Output the preview URL
-      - name: Output Preview URL
+      - name: Output live URL
         run: |
-          echo "------------------------------------------"
-          echo "Your app is live at:"
-          echo "http://${{ steps.ec2ip.outputs.public_ip }}"
-          echo "------------------------------------------"
-
-      # (Optional) Stop EC2 instance after deploy to save costs
-      - name: Stop EC2 instance
-        if: always()
-        env:
-          EC2_ID: ${{ secrets.EC2_INSTANCE_ID }}
-        run: |
-          aws ec2 stop-instances --instance-ids "$EC2_ID" --region "$AWS_REGION"
+          IP=$(aws ec2 describe-instances --instance-ids "${{ steps.ec2.outputs.id }}" \
+            --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+          {
+            echo "### Deployed"
+            echo "Live at: http://$IP"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Live at: http://$IP"

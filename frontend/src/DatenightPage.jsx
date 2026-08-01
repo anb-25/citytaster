@@ -27,56 +27,61 @@ export default function DatenightPage() {
           setDatenightSpots([]);
           console.error("Expected array but got:", data);
         }
+      })
+      .catch((err) => {
+        setDatenightSpots([]);
+        console.error("Failed to fetch datenight spots:", err);
       });
   }, [city_id]);
 
   return (
     <div>
-      <button className="btn" onClick={() => navigate(-1)}>
-        &larr; Back to City
+      <button className="btn btn-back" onClick={() => navigate(-1)}>
+        ← Back to City
       </button>
 
-      <h2 className="section-title">Datenight Spots</h2>
+      <h2 className="section-title">💕 Datenight Spots</h2>
 
       {datenightSpots.length === 0 ? (
-        <div>No datenight spots found.</div>
+        <div className="empty-state">No datenight spots found for this city yet.</div>
       ) : (
-        datenightSpots.map((spot, idx) => (
-          <div className="spot-card" key={spot._id || idx}>
-            <h3>{spot.spot_name}</h3>
+        <div className="spot-grid">
+          {datenightSpots.map((spot, idx) => (
+            <div className="spot-card" key={spot._id || idx}>
+              <h3>{spot.spot_name}</h3>
 
-            {spot.spot_rating && (
-              <div className="star-rating">&#11088; {spot.spot_rating}</div>
-            )}
-
-            <p>
-              <strong>Address:</strong> {spot.spot_address}
-            </p>
-
-            <p>
-              <strong>Phone:</strong> {spot.spot_number}
-            </p>
-
-            <div className="spot-links">
-              {spot.spot_website && (
-                <a href={spot.spot_website} target="_blank" rel="noopener noreferrer">
-                  Visit Website
-                </a>
+              {spot.spot_rating && (
+                <div className="star-rating">⭐ {spot.spot_rating}</div>
               )}
-              {spot.content_link && (
-                <a href={spot.content_link} target="_blank" rel="noopener noreferrer">
-                  View Reviews
-                </a>
+
+              <p className="spot-meta">
+                <strong>Address:</strong> {spot.spot_address}
+              </p>
+
+              <p className="spot-meta">
+                <strong>Phone:</strong> {spot.spot_number}
+              </p>
+
+              <div className="spot-links">
+                {spot.spot_website && (
+                  <a href={spot.spot_website} target="_blank" rel="noopener noreferrer">
+                    Visit Website
+                  </a>
+                )}
+                {spot.content_link && (
+                  <a href={spot.content_link} target="_blank" rel="noopener noreferrer">
+                    View Reviews
+                  </a>
+                )}
+              </div>
+
+              {spot.description && (
+                <p className="spot-description">{spot.description}</p>
               )}
             </div>
-
-            {spot.description && <p>{spot.description}</p>}
-          </div>
-        ))
+          ))}
+        </div>
       )}
     </div>
   );
 }
-
-// Note: Ensure that the backend API endpoint `/api/datenight/city/:city_id` is set up to return datenight spots for the given city_id.
-// The response should be an array of objects with the expected fields (spot_name, spot_rating, spot_address, spot_number, spot_website, content_link, description).  

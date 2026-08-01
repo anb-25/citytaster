@@ -1,18 +1,47 @@
 # infra/s3.tf
-# PURPOSE: Creates an S3 bucket for storing CSV/data files, ensuring global uniqueness with a random suffix.
+# PURPOSE: Assets + logs buckets (versioning/SSE on assets, public access blocked).
 
+resource "aws_s3_bucket" "assets" {
+  bucket        = "${var.project}-${var.environment}-assets"
+  force_destroy = true
 
-# S3 bucket to store CSV/data files
-resource "aws_s3_bucket" "csv_data" {
-  bucket        = "citytaster-csv-data-${random_id.suffix.hex}"  # Ensures global uniqueness
-  force_destroy = true  # Allows Terraform to delete even if bucket not empty (good for dev/test)
-  
   tags = {
-    Name = "citytaster-csv-data"
+    Project = "${var.project}-${var.environment}"
+    Purpose = "assets"
   }
 }
 
-# Random suffix for global uniqueness (can't reuse bucket names globally)
-resource "random_id" "suffix" {
-  byte_length = 4
+resource "aws_s3_bucket_versioning" "assets" {
+  bucket = aws_s3_bucket.assets.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
+  bucket = aws_s3_bucket.assets.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "assets" {
+  bucket                  = aws_s3_bucket.assets.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket" "logs" {
+  bucket        = "${var.project}-${var.environment}-logs"
+  force_destroy = true
+
+  tags = {
+    Project = "${var.project}-${var.environment}"
+    Purpose = "logs"
+  }
 }

@@ -36,61 +36,59 @@ export default function FoodPage() {
 
   return (
     <div>
-      <button className="btn" onClick={() => navigate(-1)}>
+      <button className="btn btn-back" onClick={() => navigate(-1)}>
         ← Back to City
       </button>
-      <h2 className="section-title">Food Spots</h2>
+      <h2 className="section-title">🍔 Food Spots</h2>
 
       {foodSpots.length === 0 ? (
-        <div>No food spots found.</div>
+        <div className="empty-state">No food spots found for this city yet.</div>
       ) : (
-        foodSpots.map((spot) => (
-          <div className="spot-card" key={spot._id}>
-            <h3>{spot.food_name}</h3>
+        <div className="spot-grid">
+          {foodSpots.map((spot) => (
+            <div className="spot-card" key={spot._id}>
+              <h3>{spot.food_name}</h3>
 
-            {spot.food_rating && (
-              <div className="star-rating">⭐ {spot.food_rating}</div>
-            )}
-
-            <p>
-              <strong>Address:</strong> {spot.food_address}
-            </p>
-
-            <p>
-              <strong>Phone:</strong> {spot.food_number}
-            </p>
-
-            <div className="spot-links">
-              {spot.food_website && (
-                <a
-                  href={spot.food_website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Visit Website
-                </a>
+              {spot.food_rating && (
+                <div className="star-rating">⭐ {spot.food_rating}</div>
               )}
-              {spot.content_link && (
-                <a
-                  href={spot.content_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View Reviews
-                </a>
+
+              <p className="spot-meta">
+                <strong>Address:</strong> {spot.food_address}
+              </p>
+
+              <p className="spot-meta">
+                <strong>Phone:</strong> {spot.food_number}
+              </p>
+
+              <div className="spot-links">
+                {spot.food_website && (
+                  <a
+                    href={spot.food_website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Visit Website
+                  </a>
+                )}
+                {spot.content_link && (
+                  <a
+                    href={spot.content_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View Reviews
+                  </a>
+                )}
+              </div>
+
+              {spot.description && (
+                <p className="spot-description">{spot.description}</p>
               )}
             </div>
-
-            {spot.description && <p>{spot.description}</p>}
-          </div>
-        ))
+          ))}
+        </div>
       )}
     </div>
   );
 }
-
-// This component fetches and displays food spots for a specific city.
-// It uses the city_id from the URL to fetch data from the backend API.
-// Each food spot is displayed in a card format with details like name, rating, address,
-// phone number, website, and description.
-// The component also includes a back button to return to the previous page.
