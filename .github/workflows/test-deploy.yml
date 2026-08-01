@@ -86,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           SCRIPT=$(cat <<EOF
-          set -euo pipefail
+          set -eu
           mkdir -p /home/ec2-user/app/data
           cd /home/ec2-user/app
           aws s3 cp s3://${{ env.S3_BUCKET }}/deploy/docker-compose.yml ./docker-compose.yml
@@ -96,7 +96,9 @@ jobs:
           AWS_REGION=${{ env.AWS_REGION }}
           DB_NAME=${{ env.DB_NAME }}
           ENVEOF
-          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} > /tmp/ecrpw
+          docker login --username AWS --password-stdin ${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com < /tmp/ecrpw
+          rm -f /tmp/ecrpw
           docker-compose pull
           docker-compose up -d mongo
           for csv in ./data/*.csv; do
