@@ -5,9 +5,19 @@
 #          pipeline (GitHub Actions -> S3 -> SSM RunCommand), not baked into the AMI/user_data.
 #          Reached only via SSM Session Manager -- no SSH key, no port 22.
 
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+}
+
 resource "aws_instance" "app" {
-  ami                    = "ami-08c40ec9ead489470" # Amazon Linux 2023, us-east-1
-  instance_type          = "t3.micro"
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t3.micro"
   # local.public_subnet_ids comes from a data source with no guaranteed order, and this VPC has a
   # subnet (us-east-1e) that doesn't support t3.micro -- pin to the first subnet from tfvars instead,
   # which is us-east-1a.
