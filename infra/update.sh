@@ -23,7 +23,7 @@ for csv in ./data/*.csv; do
   docker exec citytaster-mongo mongoimport \
     --db CityTasterDB \
     --collection "$collection" \
-    --type csv --headerline --file "/data/$collection.csv" --drop
+    --type csv --headerline --file "/csv/$collection.csv" --drop
 done
 
 echo "[INFO] Redeploying stack..."

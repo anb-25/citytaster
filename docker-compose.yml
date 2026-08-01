@@ -20,7 +20,10 @@ services:
       - "27017:27017" # for admin/dev only
     volumes:
       - mongo-data:/data/db
-      - ./data:/data:ro # CSVs mounted read-only for mongoimport
+      # NOTE: mounted at /csv, not /data -- the mongo image also declares /data/configdb as its
+      # own volume, and mounting a read-only bind at /data blocks Docker from creating that
+      # mountpoint ("read-only file system" on container start).
+      - ./data:/csv:ro # CSVs mounted read-only for mongoimport
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 5s
