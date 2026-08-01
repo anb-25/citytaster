@@ -31,3 +31,14 @@ resource "aws_instance" "app" {
     Name = "${var.project}-${var.environment}-app"
   }
 }
+
+# Stable public IP so a domain pointed at this instance doesn't break if it's ever
+# restarted or replaced (a plain EC2 public IP is dynamic and can change).
+resource "aws_eip" "app" {
+  instance = aws_instance.app.id
+  domain   = "vpc"
+
+  tags = {
+    Name = "${var.project}-${var.environment}-app-eip"
+  }
+}

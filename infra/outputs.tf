@@ -2,8 +2,8 @@
 # PURPOSE: Outputs important information such as EC2 IP/DNS, S3 bucket name, ECR repo URIs, and AWS account ID.
 
 output "ec2_public_ip" {
-  description = "Public IP address of the EC2 instance"
-  value       = aws_instance.app.public_ip
+  description = "Stable Elastic IP address of the EC2 instance -- point DNS A records here"
+  value       = aws_eip.app.public_ip
 }
 
 output "ec2_public_dns" {
